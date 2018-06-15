@@ -5,6 +5,8 @@ library(matrixStats)
 library(markdown)
 library(plotly)
 library(kBET)
+library(akima)
+library(reshape2)
 library(crosstalk)
 library(tidyr)
 library(dplyr)
@@ -31,891 +33,556 @@ library(lmtest)
 library(DT)
 library(Rtsne)
 library(plotly)
+library(scran)
+library(preprocessCore)
 library(htmlwidgets)
-load("raw_var.rda")
-load("info_var.rda")
-load("mnn_var.rda")
-load("iter_var.rda")
-load("raw_all.rda")
-load("info_all.rda")
-load("mnn_all.rda")
-load("iter_all.rda")
+load("raw.rda")
+load("info.rda")
+rna <- readRDS("/Users/alice/Documents/research/alignment/newdata/shiny/Alignment/RNA_data_norm_hg19_all.rds")
 
 ui <-  shinyUI(navbarPage("APP",
                           tabPanel("APP", fluidPage(
                             #headerPanel("GrowthAnalyst"),
                             sidebarLayout(
                               sidebarPanel(
-                              
                                 #selectInput('search','Search',multiple = T),
-                                checkboxInput('part','Low variability data',value = TRUE),
-                                conditionalPanel(
-                                  condition = "input.part == true",
                                   uiOutput('search'),
-                                  selectInput("corr_part", "Batch correction", 
-                                              list("uncorrected"="uncorrected", "mnn"="mnn","iterated mnn"="iter")
+                                  h3('Plotting option'),
+                                  checkboxInput("cate", label = 'Plot by category'),
+                                  conditionalPanel(
+                                    condition = "input.cate== true",
+                                  selectInput("cate_color", "Select category (color)", 
+                                              list('Assay' = 'assay',"Biosample type"="bio", "Cell type"="cell","Germ layer"="layer",'Cancer' = 'cancer')
                                   ),
-                                  checkboxInput('tsne_var','Tsne plot',value = TRUE),
-                                  checkboxInput('pca_var','PCA plot')
-                                 # checkboxInput('compare','Cmpare methods')
-                                  
-                                  
-                                ),
-                             
-                                tags$hr(),
-                                tags$hr(),
-                                
-                                checkboxInput('all','All data'),
-                                conditionalPanel(
-                                  condition = "input.all == true",
-                                  uiOutput('search2'),
-                                  selectInput("corr_all", "Batch correction", 
-                                              list("uncorrected"="uncorrected", "mnn"="mnn","iterated mnn"="iter")
+                                  uiOutput('cate_shape')
                                   ),
-                                  checkboxInput('tsne_all','Tsne plot',value = TRUE),
-                                  checkboxInput('pca_all','PCA plot')
-                                ) 
-                                ),
-                               
+                                  h3('Method selection'),
+                                  checkboxInput("method", 'Correction methods'),
+                                  conditionalPanel(
+                                    condition = "input.method== true",
+                                  selectInput("corr", "Batch correction method", 
+                                              list("uncorrected"="uncorrected", "mnn"="mnn","iterated mnn"="iter")
+                                  )),
+                                  h3("Filtering"),
+                                  checkboxInput("filter", 'Filter data'),
+                                  conditionalPanel(
+                                    condition = "input.filter== true",
+                                  checkboxInput('cancer','Cancer'),
+                                  conditionalPanel(
+                                    condition = "input.cancer == true",
+                                    uiOutput('sel_cancer')
+                                  ),
+                                  checkboxInput('assay','Assay'),
+                                  conditionalPanel(
+                                    condition = "input.assay == true",
+                                    uiOutput('sel_assay')
+                                  ),
+                                  checkboxInput('bio','Biosample type '),
+                                  conditionalPanel(
+                                    condition = "input.bio == true",
+                                    uiOutput('sel_bio')
+                                  ),
+                                  checkboxInput('cell','Cell type'),
+                                  conditionalPanel(
+                                    condition = "input.cell == true",
+                                    uiOutput('sel_cell')
+                                  ),
+                                  checkboxInput('layer','Germ layer'),
+                                  conditionalPanel(
+                                    condition = "input.layer == true",
+                                    uiOutput('sel_layer')
+                                  ),
+                                  checkboxInput('var','View low variability cell type'),
+                                  conditionalPanel(
+                                    condition = "input.var == true",
+                                    sliderInput("quantile",'View cell type with distance variance below quantile:' ,
+                                                min = 0.1, max = 1, value = 0.5,step =0.05)
+                                 # checkboxInput('compare','Compare methods')
+                                 )
+                                 ),
+                                 h3("Gene expression plots"),
+                                 
+                                 checkboxInput("geneexpre", 'Gene expression heatmap'),
+                                   conditionalPanel(
+                                   condition = "input.geneexpre == true",
+                                 uiOutput('gene')
+                                 ),
+                                 checkboxInput("genecurve", 'Gene expression curve'),
+                                 conditionalPanel(
+                                   condition = "input.genecurve == true",
+                                 uiOutput('celltype'),
+                                 uiOutput('gene2'))
+                              ),
                               # Show a plot of the generated distribution
                               mainPanel(
-                                verbatimTextOutput("impo"),
-                                  conditionalPanel(
-                                  condition = 'input.part==true && input.tsne_var==true',
-                                  h4('Tsne plot of low variability data'),
-                                  plotlyOutput('plot1'),
-                                  h4('Tsne plot of low variability data (by type)'),
-                                  plotlyOutput('plot2'),
-                                  h4('Tsne plot of low variability data (by layer)'),
-                                  plotlyOutput('layer_var'),
-                                  plotOutput('kbet'),
-                                  plotOutput('compare')
-                                  ),
-
-                                # conditionalPanel(
-                                #   condition = 'input.part==true && input.tsne_var==true',
-                                #   h4('Tsne plot of low variability data (by type)'),
-                                #   plotlyOutput('plot2')),
-                                
-                                conditionalPanel(
-                                  condition = 'input.part==true && input.pca_var==true',
-                                  h4('PCA plot of low variability data'),
-                                  plotlyOutput('pca1'),
-                                  h4('PCA plot of low variability data (by type)'),
-                                  plotlyOutput('pca2'),
-                                  h4('PCA plot of low variability data (by layer)'),
-                                  plotlyOutput('layer_var_pca')),
-                                
-                                conditionalPanel(
-                                  condition = 'input.all==true && input.tsne_all==true',
-                                  h4('Tsne plot of all data'),
-                                  plotlyOutput('plot3'),
-                                  h4('Tsne plot of all data (by type)'),
-                                  plotlyOutput('plot4'),
-                                  h4('Tsne plot of all data (by layer)'),
-                                  plotlyOutput('layer_all')),
-                                conditionalPanel(
-                                  condition = 'input.all==true && input.pca_all==true',
-                                  h4('PCA plot of all data'),
-                                  plotlyOutput('pca3'),
-                                  h4('PCA plot of all data (by type)'),
-                                  plotlyOutput('pca4'),
-                                  h4('PCA plot of all data (by layer)'),
-                                  plotlyOutput('layer_all_pca'))
+                                  tabsetPanel(
+                                    tabPanel("Tsne", 
+                                             verbatimTextOutput("impo"),
+                                             h4('Tsne plot'),
+                                             plotlyOutput('plot1')
+                                             ), 
+                                    tabPanel("PCA", 
+                                             h4('PCA plot'),
+                                             plotlyOutput('pca1')
+                                             ), 
+                                    tabPanel("Gene expression", 
+                                             h4('Gene expression heatmap'),
+                                             plotlyOutput('heat')
+                                             ),
+                                    tabPanel("Gene expression curve", 
+                                             h4('Gene expression curve'),
+                                             verbatimTextOutput('curve_text'),
+                                             plotlyOutput('curve')
+                                    ),
+                                    tabPanel("Correction methods evaluation", 
+                                             plotOutput('kbet'),
+                                             plotOutput('compare'))
+                                )# end of tabset panel 
+                              )# end of main panel 
+                             
                                 )
                               )
-                            )
-                          )
-                            )
-                            )
+                            ))
+)
+                          
+                            
                           
 
 server <- function(input, output) {
-  shape_var=as.numeric(unique(info_var[,2]))
-  shape_var=ifelse(shape_var<=18,shape_var,shape_var-18)
-  pred_var=ifelse(info_var[,3]=='match','3',info_var[,4])
-  link_var= gsub("@.*","",info_var[,5])
-
-  urls=link_var
+  ##data 
+  cell=info[,1]
+  cancer = info[,2]
+  batch=info[,3]
+  batch[info[,3]=='match']='Predicted DNase'
+  batch[info[,3]=='predicted']='Predicted DNase'
+  batch[info[,3]=='true']='True DNase' 
+  bat = ifelse(batch=='True DNase',2,1)
+  link= gsub("@.*","",info[,4])
+  layer=info[,5]
+  bio = info[,6]
   
-  dat = reactive({
-    if (input$corr_part=='uncorrected'){
-      raw_var
-   } else if (input$corr_part=='mnn'){
-       mnn_var
+  
+  ###input 
+  output$search <- renderUI({
+    selectizeInput("search",
+                   label = "Sample of Interest",
+                   choices = colnames(raw),
+                   multiple = T,
+                   options = list(maxItems = nrow(raw), placeholder = 'Select a sample')
+    )
+  })
+  
+  output$gene <- renderUI({
+    selectizeInput("gene",
+                   label = "Gene of Interest",
+                   choices = rownames(rna),
+                   multiple = F,
+                   options = list(placeholder = 'Select genes')
+    )
+  })
+  output$gene2 <- renderUI({
+    selectizeInput("gene2",
+                   label = "Gene of Interest",
+                   choices = rownames(rna),
+                   multiple = T,
+                   options = list(maxItems = nrow(rna),placeholder = 'Select cell types')
+    )
+  })
+  
+  output$celltype <- renderUI({
+    selectizeInput("celltype",
+                   label = "Cell types of Interest",
+                   choices = cell_var(),
+                   multiple = T,
+                   options = list(placeholder = 'Select a sample')
+    )
+  })
+  output$sel_assay <- renderUI({
+    selectizeInput("sel_assay",
+                   label = "Assay of Interest",
+                   choices = batch,
+                   multiple = T,
+                   options = list(maxItems = length(unique(batch)))
+    )
+  })
+  output$sel_bio <- renderUI({
+    selectizeInput("sel_bio",
+                   label = "Biosample type of Interest",
+                   choices = bio,
+                   multiple = T,
+                   options = list(maxItems = length(unique(bio)))
+    )
+  })
+  output$sel_cell <- renderUI({
+    selectizeInput("sel_cell",
+                   label = "Cell type of Interest",
+                   choices = cell,
+                   multiple = T,
+                   options = list(maxItems = length(unique(cell)))
+    )
+  })
+  output$sel_layer <- renderUI({
+    selectizeInput("sel_layer",
+                   label = "Germ Layer of Interest",
+                   choices = layer,
+                   multiple = T,
+                   options = list(maxItems = length(unique(layer)))
+    )
+  })  
+
+  output$sel_cancer <- renderUI({
+    selectizeInput("sel_cancer",
+                   label = "Tumor & normal cell",
+                   choices = cancer,
+                   multiple = T,
+                   options = list(maxItems = length(unique(cancer)))
+    )
+  })
+
+  
+  output$cate_shape  <- renderUI({
+    selectInput("cate_shape", "Select category (shape)",
+                list('Assay' = 'assay',"Biosample type"="bio", "Cell type"="cell","Germ layer"="layer",'cancer' = 'Cancer'),
+                selected = input$cate_color)
+  })
+
+  
+  
+  
+  
+pos_sel <- reactive ({
+     if (length(input$sel_cell)==0){
+       cell_pos = c(1:length(cell))
+     }else{
+       cell_pos = which(cell%in%input$sel_cell)
+    }
+    
+  if (length(input$sel_assay)==0){
+    assay_pos = c(1:length(cell))
+  }else{
+    assay_pos = which(batch%in%input$sel_assay)
+  }
+  
+  if (length(input$sel_layer)==0){
+    layer_pos = c(1:length(cell))
+  }else{
+    layer_pos = which(layer%in%input$sel_layer)
+  }
+  
+  if (length(input$sel_cancer)==0){
+    cancer_pos = c(1:length(cell))
+  }else{
+    cancer_pos = which(cancer%in%input$sel_cancer)
+  }
+  if (length(input$sel_bio)==0){
+    bio_pos = c(1:length(cell))
+  }else{
+    bio_pos = which(bio%in%input$sel_bio)
+  }
+    Reduce(intersect, list(cell_pos,assay_pos,layer_pos,cancer_pos,bio_pos))
+})
+
+  
+  dat_sel = reactive({
+    normalize.quantiles(as.matrix(raw[,pos_sel()]),copy=TRUE)
+  })
+  
+  cell_sel = reactive({
+    cell[pos_sel()]
+  })
+  
+  keep = reactive({
+    if (input$var==FALSE){
+      cutoff=1
     }else{
-      iter_var
-      }
-  })
-  tsne=reactive({
+      cutoff = input$quantile
+    }
     set.seed(10)
-    rtsne=Rtsne(prcomp(t((dat())),scale=T)$x[,1:50])$Y
-    rownames(rtsne)=colnames(dat())
-    tsne_unc=as.data.frame(rtsne)
-    tsne_unc
+    rtsne=Rtsne(prcomp(t((dat_sel())),scale=T)$x[,1:50])$Y  
+    rownames(rtsne)=colnames(dat_sel())
+    tsne_raw=as.data.frame(rtsne)
+    type = unique(cell_sel()) 
+    type=type[type!='stem-cell']
+    distance= lapply(c(1:length(type)), function(i) mean(as.matrix(dist(tsne_raw[which(cell_sel()==type[i]),]))) )
+    distance=unlist(distance)
+    dd=distance[distance!=0]
+    cut = quantile(dd,cutoff)
+    high_var=which(distance>cut)
+    type_del=type[high_var]
+    keep_type = which(is.na(match(cell_sel(),type_del)))
+    keep_type
+
   })
+    
+  pos=reactive({
+    if (input$var==F){
+    pos_sel()  
+    }else{
+    pos_sel()[keep()]
+    }
+  })
+
+  dat_var = reactive({
+    dat_sel()[,keep()]
+  })
+  
+
+ cell_var = reactive({
+   cell[pos()]
+ })
+ layer_var = reactive({
+   layer[pos()]
+ }) 
+ bio_var = reactive({
+   bio[pos()]
+ }) 
+ cancer_var = reactive({
+   cancer[pos()]
+ })
+ 
+ batch_var = reactive({
+   batch[pos()]
+ })
+ bat_var = reactive({
+   bat[pos()]
+ })
+  
+  cate_color <- reactive ({
+    switch(input$cate_color,
+           "assay" = batch_var(),
+           "bio" = bio_var(),
+           'cell'=cell_var(),
+           'layer' = layer_var(), 
+           'cancer' = cancer_var())
+          })
+
+  cate_shape <- reactive ({
+    switch(input$cate_shape,
+           "assay" = batch_var(),
+           "bio" = bio_var(),
+           'cell'=cell_var(),
+           'layer' = layer_var(), 
+           'cancer' = cancer_var())
+  })
+  
+ shape_var=reactive({
+   allshape=NULL
+  for (j in 1: length(unique(cate_shape()))){
+    for (i in 1:length(cate_shape())){
+      if (cate_shape()[i] == sort((unique(cate_shape())))[j]){
+        allshape[i] = j
+      }
+    }
+  }
+  allshape=unique(allshape)
+  shape=ifelse(allshape<=18,allshape,allshape-18)
+  shape
+ })
+
+ dat = reactive({
+   if (input$corr=='uncorrected'){
+     dat_var()
+   }else if (input$corr=='mnn'){
+     mnn_out=mnnCorrect(as.matrix(dat_var()[,which(bat_var()==1)]),as.matrix(dat_var()[,which(bat_var()==2)]),compute.angle=TRUE,k=15)
+     X_mnn<-do.call(cbind, mnn_out$corrected)
+     X_mnn
+   # }else{
+   #   mnn_out=mnnCorrect(as.matrix(dat_var()[,which(batch_var()=='Predicted DNase')]),as.matrix(dat_var()[,which(batch_var()=='True DNase')]),compute.angle=TRUE,k=15)
+   #   X_mnn<-do.call(cbind, mnn_out$corrected)
+   #   for (i in 1:100){
+   #     iter_mnn=mnnCorrect(as.matrix(X_mnn[,which(batch_var()=='Predicted DNase')]),as.matrix(X_mnn[,which(batch_var()=='True DNase')]),compute.angle=TRUE,k=15)
+   #     iter_X<-do.call(cbind, iter_mnn$corrected)
+   #   }
+   #   iter_X
+    }
+})
+
+ tsne = reactive({
+       set.seed(10)
+       rtsne=Rtsne(prcomp(t((dat())),scale=T)$x[,1:50])$Y
+       rownames(rtsne)=colnames(dat())
+       tsne=as.data.frame(rtsne)
+       colnames(tsne)=c('Tsne1','Tsne2')
+       tsne
+ })
+
+ dat_cv = reactive({
+   raw = dat()
+ cv = apply(raw,1,sd)/rowMeans(raw)
+ raw[which(cv>0),]
+})
+
 pca = reactive({
-  pca_unc=prcomp(t((dat())),scale=T)$x
+  pca_unc=prcomp(t((dat_cv())),scale=T)$x
   pca_unc = as.data.frame(pca_unc)
   pca_unc
 })
 
-  shape_all=as.numeric(unique(info_all[,2]))
-  shape_all=ifelse(shape_all<=18,shape_all,shape_all-18)
-  pred_all=ifelse(info_all[,3]=='match','3',info_all[,4])
-  link_all= gsub("@.*","",info_all[,5])
-
-  #urls=link_all
-  dat_all = reactive({
-    if (input$corr_all=='uncorrected'){
-      raw_all
-    } else if (input$corr_all=='mnn'){
-      mnn_all
-    }else{
-      iter_all
-    }
-  })
-
-  
-  tsne_all=reactive({
-    set.seed(10)
-    rtsne=Rtsne(prcomp(t((dat_all())),scale=T)$x[,1:50])$Y
-    rownames(rtsne)=colnames(dat_all())
-    tsne_unc=as.data.frame(rtsne)
-    tsne_unc
-  })
-  
-  pca_all = reactive({
-    pca_unc=prcomp(t((dat_all())),scale=T)$x
-    pca_unc = as.data.frame(pca_unc)
-    pca_unc
-  })
-  
-
-  output$search <- renderUI({
-    selectizeInput("search",
-                   label = "Sample of Interest",
-                   choices = colnames(dat()),
-                   multiple = T,
-                   options = list(maxItems = nrow(dat()), placeholder = 'Select a sample')
-                   )
-  })
-  
-  output$search2 <- renderUI({
-    selectizeInput("search2",
-                   label = "Sample of Interest",
-                   choices = colnames(dat_all()),
-                   multiple = T,
-                   options = list(maxItems = 5, placeholder = 'Select a sample')
-    )
-  })
-  # output$impo <- renderPrint({
-  #   group = as.character(rep(1,ncol(dat())))
-  #   group[pos()] = info_var[,1][pos()]
-  #   group
-  # })
-    
-  pos <- reactive ({
+  pos_sample <- reactive ({
     match(input$search,colnames(dat()))
     })
-  
-  pos_all <- reactive ({
-    match(input$search2,colnames(dat_all()))
+
+  pos_gene <- reactive ({
+    match(input$gene,rownames(rna))
   })
+
+  gene_curve = reactive({
+    match(input$gene2,rownames(rna))
+  })
+  cell_rna = reactive({
+    cell_var()[which(batch_var()=='Predicted DNase')]
+  })
+
+  pca_curve = reactive({
+    pca()[which(cell_rna()%in%input$celltype),]
+  })
+  rna_curve = reactive({
+    rna[,which(cell_rna()%in%input$celltype)]
+  })
+  dd = reactive({
+    if (length(input$gene2)==1){
+      dd = data.frame(cbind(pca_curve()$PC1,rna_curve()[gene_curve(),]))
+    }else{
+    dd = data.frame(cbind(pca_curve()$PC1,t(rna_curve()[gene_curve(),])))
+    #cell_d = cell[which(cell_rna()%in%input$celltype)]
+    colnames(dd)[1]= 'PC1'
+    }
+    dd
+  })
+
+  long = reactive({
+    long = melt(dd(),id='PC1', value.name = "gene")
+    long
+  })
+  line = reactive({
+    dd=dd()
+    fitted = sapply(1:length(input$gene2),function(i) fitted(loess(dd[,i+1] ~ dd$PC1)))
+    line = data.frame(cbind(dd$PC1,fitted))
+    colnames(line) = colnames(dd)
+    line = melt(line,id='PC1', value.name = "fit")
+    line
+  })
+
+  # output$impo <- renderPrint({
+  # class(line())
+  #   head(line())
+  #   })
+
+
+  # output$curve_text = renderPrint({
+  #   if (length(input$gene2==0)&length(input$celltype==0)){
+  #     cat('Please select gene and cell type of interest')
+  #   }else if (length(input$celltype==0)&length(input$gene2!=0)){
+  #     cat('Please select cell type of interest')
+  #   }else if (length(input$celltype!=0)&length(input$gene2==0)){
+  #     cat('Please select gene of interest')
+  #   }else{
+  #     cat(paste0('Plot gene ',input$gene2, 'expression curve of ', input$celltype, 'samples'))
+  #   }
+  # })
   
+  output$curve =renderPlotly({
+    long=long()
+    line=line()
+    plot_ly(long, x = ~PC1, y = ~gene, type = 'bar',
+            color = ~variable,
+            marker = list(opacity=0.5,width = 2)) %>%
+      add_lines(x =~line$PC1,y = ~ line$fit, type = 'line',
+                color = ~line$variable,
+                showlegend = F)  %>%
+      layout(title = paste0( 'Gene expression curve of',input$celltype),
+             xaxis = list(
+               title = "PC1",
+               tickfont = list(
+                 size = 14,
+                 color = 'rgb(107, 107, 107)')),
+             yaxis = list(
+               title = 'Gene expression',
+               titlefont = list(
+                 size = 16,
+                 color = 'rgb(107, 107, 107)'),
+               tickfont = list(
+                 size = 14,
+                 color = 'rgb(107, 107, 107)')))
+  })
+
 
   output$plot1 <- renderPlotly({
     if (length(input$search) == 0) {
-     plot_ly(tsne(), x = ~V1, y = ~V2,
-              color = info_var[,1],colors='Set1',
-              symbol=~info_var[,1] ,symbols =shape_var,  marker=list(size=10, opacity=0.7)
-            ) %>%
-        add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                      '</br> Cell: ', info_var[,1],
-                                                                      '</br> Batch: ', info_var[,3]),
-                    hovermode="closest"
-            ) %>%
-    onRender("
-             function(el, x) {
-             el.on('plotly_click', function(d) {
-             // d.points is an array of objects which, in this case,
-             // is length 1 since the click is tied to 1 point.
-             var pt = d.points[0];
-             var url = pt.data.info[pt.pointNumber];
-             // DISCLAIMER: this won't work from RStudio
-             window.open(url);
-             });
-             }
-             ")
-      }else{
-        group = rep('unselected',ncol(dat()))
-        group[pos()] = info_var[,1][pos()]
-        plot_ly(tsne(), x = ~V1, y = ~V2,
-                color = ~group,colors='Set1',
-                symbol= ~info_var[,1] ,symbols =shape_var,  marker=list(size=10, opacity=0.7)) %>%
-          add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                        '</br> Cell: ', info_var[,1],
-                                                                        '</br> Batch: ', info_var[,3]),
-                      hovermode="closest"
-          ) %>%
-          onRender("
-                   function(el, x) {
-                   el.on('plotly_click', function(d) {
-                   // d.points is an array of objects which, in this case,
-                   // is length 1 since the click is tied to 1 point.
-                   var pt = d.points[0];
-                   var url = pt.data.info[pt.pointNumber];
-                   // DISCLAIMER: this won't work from RStudio
-                   window.open(url);
-                   });
-                   }
-                   ")
-
-      }
-  })
-  
-  
-  output$plot2 <- renderPlotly({
-    if (length(input$search) == 0) {
-      plot_ly(tsne(), x = ~V1, y = ~V2,
-              color = info_var[,1],colors='Set1',
-              symbol=info_var[,3],symbols =unique(pred_var),  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                      '</br> Cell: ', info_var[,1],
-                                                                      '</br> Batch: ', info_var[,3]),
-                    hovermode="closest"
-        ) %>%
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
+      plot_ly(tsne(), x = ~Tsne1, y = ~Tsne2,
+            color = cate_color(),colors='Set1',
+            symbol=~cate_shape(),symbols =shape_var(),  marker=list(size=10, opacity=0.7)) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var()),
+                        hovermode="closest"
+            )
                  }else{
                    group = rep('unselected',ncol(dat()))
-                   group[pos()] = info_var[,1][pos()]
-                   plot_ly(tsne(), x = ~V1, y = ~V2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=info_var[,3],symbols =unique(pred_var),  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                                   '</br> Cell: ', info_var[,1],
-                                                                                   '</br> Batch: ', info_var[,3]),
+                   group[pos_sample()] = cate_color()[pos_sample()]
+                   plot_ly(tsne(), x = ~Tsne1, y = ~Tsne2,
+                           color = ~group,colors='Set1',
+                           symbol= ~cate_shape() ,symbols =shape_var(),  marker=list(size=10, opacity=0.7)) %>%
+                     add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                                               '</br> Cell: ', cell_var(),
+                                                                               '</br> Batch: ', batch_var()),
                                  hovermode="closest"
-                     ) %>%
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                              }
-                              })
-  output$layer_var= renderPlotly({
-    if (length(input$search) == 0) {
-      plot_ly(tsne(), x = ~V1, y = ~V2,
-              color = info_var[,1],colors='Set1',
-              symbol=info_var[,6],symbols =as.factor(unique(info_var[,6])),  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                      '</br> Cell: ', info_var[,1],
-                                                                      '</br> Batch: ', info_var[,3]),
-                    hovermode="closest"
-        ) %>%
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat()))
-                   group[pos()] = info_var[,1][pos()]
-                   plot_ly(tsne(), x = ~V1, y = ~V2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=info_var[,6],symbols =as.factor(unique(info_var[,6])),  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                                   '</br> Cell: ', info_var[,1],
-                                                                                   '</br> Batch: ', info_var[,3]),
-                                 hovermode="closest"
-                     ) %>%
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
+                     )
+
                               }
                               })
 
-  output$plot3 <- renderPlotly({
-    if (length(input$search2) == 0) {
-      plot_ly(tsne_all(), x = ~V1, y = ~V2,
-              color = info_all[,1],colors='Set1',
-              symbol=~info_all[,1] ,symbols =shape_all,  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                      '</br> Cell: ', info_all[,1],
-                                                                      '</br> Batch: ', info_all[,3]),
-                    hovermode="closest"
-        ) %>%
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat_all()))
-                   group[pos_all()] = info_all[,1][pos_all()]
-                   plot_ly(tsne_all(), x = ~V1, y = ~V2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=~info_all[,1] ,symbols =shape_all,  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                                   '</br> Cell: ', info_all[,1],
-                                                                                   '</br> Batch: ', info_all[,3]),
-                                 hovermode="closest"
-                     ) %>%
-                  
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                              }
-                              })
-  
-  
-  output$plot4 <- renderPlotly({
-    if (length(input$search2) == 0) {
-      plot_ly(tsne_all(), x = ~V1, y = ~V2,
-              color = info_all[,1],colors='Set1',
-              symbol=info_all[,3],symbols =unique(pred_all),  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                      '</br> Cell: ', info_all[,1],
-                                                                      '</br> Batch: ', info_all[,3]),
-                    hovermode="closest"
-        ) %>%
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat_all()))
-                   group[pos_all()] = info_all[,1][pos_all()]
-                   plot_ly(tsne_all(), x = ~V1, y = ~V2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=pred_all,symbols =unique(pred_all),  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                                   '</br> Cell: ', info_all[,1],
-                                                                                   '</br> Batch: ', info_all[,3]),
-                                 hovermode="closest"
-                     ) %>%
 
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                              }
-                              })
-  
-  output$layer_all <- renderPlotly({
-    if (length(input$search2) == 0) {
-      plot_ly(tsne_all(), x = ~V1, y = ~V2,
-              color = info_all[,1],colors='Set1',
-              symbol=info_all[,6],symbols =as.factor(unique(info_all[,6])),  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                      '</br> Cell: ', info_all[,1],
-                                                                      '</br> Batch: ', info_all[,3]),
-                    hovermode="closest"
-        ) %>%
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat_all()))
-                   group[pos_all()] = info_all[,1][pos_all()]
-                   plot_ly(tsne_all(), x = ~V1, y = ~V2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=pred_all,symbols =unique(pred_all),  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                                   '</br> Cell: ', info_all[,1],
-                                                                                   '</br> Batch: ', info_all[,3]),
-                                 hovermode="closest"
-                     ) %>%
-                     
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                              }
-         })
-  
-  ##pca
-  
-  
   output$pca1 <- renderPlotly({
     if (length(input$search) == 0) {
       plot_ly(pca(), x = ~PC1, y = ~PC2,
-              color = info_var[,1],colors='Set1',
-              symbol=~info_var[,1] ,symbols =shape_var,  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                      '</br> Cell: ', info_var[,1],
-                                                                      '</br> Batch: ', info_var[,3]),
+              color = cate_color(),colors='Set1',
+              symbol= ~cate_shape() ,symbols =shape_var(),  marker=list(size=10, opacity=0.7)) %>%
+        add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                                  '</br> Cell: ', cell_var(),
+                                                                  '</br> Batch: ', batch_var()),
                     hovermode="closest"
-        ) %>%
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
+        )
+
+           }else{
                    group = rep('unselected',ncol(dat()))
-                   group[pos()] = info_var[,1][pos()]
+                   group[pos_sample()] = cate_color()[pos_sample()]
                    plot_ly(pca(), x = ~PC1, y = ~PC2,
                            color = ~group,colors='Set1',
-                           symbol=~info_var[,1] ,symbols =shape_var,  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                                   '</br> Cell: ', info_var[,1],
-                                                                                   '</br> Batch: ', info_var[,3]),
+                           symbol= ~cate_shape() ,symbols =shape_var(),  marker=list(size=10, opacity=0.7)) %>%
+                     add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                                               '</br> Cell: ', cell_var(),
+                                                                               '</br> Batch: ', batch_var()),
                                  hovermode="closest"
-                     ) %>%
-              
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
+                     )
                               }
                               })
-  
-  
-  output$pca2 <- renderPlotly({
-    if (length(input$search) == 0) {
-      plot_ly(pca(), x = ~PC1, y = ~PC2,
-              color = info_var[,1],colors='Set1',
-              symbol=info_var[,3],symbols =unique(pred_var),  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                      '</br> Cell: ', info_var[,1],
-                                                                      '</br> Batch: ', info_var[,3]),
-                    hovermode="closest"
-        ) %>%
 
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat()))
-                   group[pos()] = info_var[,1][pos()]
-                   plot_ly(pca(), x = ~PC1, y = ~PC2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=info_var[,3],symbols =unique(pred_var),  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                                   '</br> Cell: ', info_var[,1],
-                                                                                   '</br> Batch: ', info_var[,3]),
-                                 hovermode="closest"
-                     ) %>%
 
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                              }
-                              })
-  
-  output$layer_var_pca <- renderPlotly({
-    if (length(input$search) == 0) {
-      plot_ly(pca(), x = ~PC1, y = ~PC2,
-              color = info_var[,1],colors='Set1',
-              symbol=info_var[,6],symbols =as.factor(unique(info_var[,6])),  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                      '</br> Cell: ', info_var[,1],
-                                                                      '</br> Batch: ', info_var[,3]),
-                    hovermode="closest"
-        ) %>%
-        
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat()))
-                   group[pos()] = info_var[,1][pos()]
-                   plot_ly(pca(), x = ~PC1, y = ~PC2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=info_var[,6],symbols =as.factor(unique(info_var[,6])),  marker=list(size=10, opacity=0.7)) %>%
-                           add_markers(info = ~link_var, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
-                                                                                   '</br> Cell: ', info_var[,1],
-                                                                                   '</br> Batch: ', info_var[,3]),
-                                 hovermode="closest"
-                     ) %>%
-                     
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                              }
-                              })
-  output$pca3 <- renderPlotly({
-    if (length(input$search2) == 0) {
-      
-      plot_ly(pca_all(), x = ~PC1, y = ~PC2,
-              color = info_all[,1],colors='Set1',
-              symbol=~info_all[,1] ,symbols =shape_all,  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                      '</br> Cell: ', info_all[,1],
-                                                                      '</br> Batch: ', info_all[,3]),
-                    hovermode="closest"
-        ) %>%
+  output$heat =renderPlotly({
+    tsne=tsne()[which(batch_var()=='Predicted DNase'),]
+    pos = pos()[pos() <= ncol(rna)]
+    z = rna[pos_gene(),pos]
+    cell = cell_var()[which(batch_var()=='Predicted DNase')]
+    x = tsne$Tsne1
+    y =tsne$Tsne2
+    s <- interp(x,y,z)
+    d <- melt(s$z, na.rm = TRUE)
+    names(d) <- c("x", "y", "z")
+    d$Tsne1 <- s$x[d$x]
+    d$Tsne2 <- s$y[d$y]
+    mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
+  g = ggplot(data = d, aes(x = Tsne1, y = Tsne2, fill = z,text = paste("Gene expression level:",z)))+
+      geom_raster()+
+      scale_fill_gradientn(colours = mycol,limits=range(z),'Gene expression level')+
+      theme_classic()+
+    ggtitle(paste0('Gene expression heatmap of',input$gene))
+    
 
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat_all()))
-                   group[pos_all()] = info_all[,1][pos_all()]
-                   plot_ly(pca_all(), x = ~PC1, y = ~PC2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=~info_all[,1] ,symbols =shape_all,  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                                   '</br> Cell: ', info_all[,1],
-                                                                                   '</br> Batch: ', info_all[,3]),
-                                 hovermode="closest"
-                     ) %>%
-            
-                     
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                              }
-                              })
-  
-  
-  output$pca4 <- renderPlotly({
-    if (length(input$search2) == 0) {
-      plot_ly(pca_all(), x = ~PC1, y = ~PC2,
-              color = info_all[,1],colors='Set1',
-              symbol=info_all[,3],symbols =unique(pred_all),  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                      '</br> Cell: ', info_all[,1],
-                                                                      '</br> Batch: ', info_all[,3]),
-                    hovermode="closest"
-        ) %>%
-
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat_all()))
-                   group[pos_all()] = info_all[,1][pos_all()]
-                   plot_ly(pca_all(), x = ~PC1, y = ~PC2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=info_all[,3],symbols =unique(pred_all),  marker=list(size=10, opacity=0.7)) %>%
-                     add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                                   '</br> Cell: ', info_all[,1],
-                                                                                   '</br> Batch: ', info_all[,3]),
-                                 hovermode="closest"
-                     ) %>%
-                   
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                 }
-                 })
-  
-  output$layer_all_pca <- renderPlotly({
-    if (length(input$search2) == 0) {
-      plot_ly(pca_all(), x = ~PC1, y = ~PC2,
-              color = info_all[,1],colors='Set1',
-              symbol=info_all[,6],symbols =as.factor(unique(info_all[,6])),  marker=list(size=10, opacity=0.7)) %>%
-        add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                      '</br> Cell: ', info_all[,1],
-                                                                      '</br> Batch: ', info_all[,3]),
-                    hovermode="closest"
-        ) %>%
-        
-        onRender("
-                 function(el, x) {
-                 el.on('plotly_click', function(d) {
-                 // d.points is an array of objects which, in this case,
-                 // is length 1 since the click is tied to 1 point.
-                 var pt = d.points[0];
-                 var url = pt.data.info[pt.pointNumber];
-                 // DISCLAIMER: this won't work from RStudio
-                 window.open(url);
-                 });
-                 }
-                 ")
-                 }else{
-                   group = rep('unselected',ncol(dat_all()))
-                   group[pos_all()] = info_all[,1][pos_all()]
-                   plot_ly(pca_all(), x = ~PC1, y = ~PC2,
-                           color = ~as.factor(group),colors='Set1',
-                           symbol=info_all[,6],symbols =as.factor(unique(info_all[,6])),  marker=list(size=10, opacity=0.7)) %>%
-                     
-                     add_markers(info = ~link_all, hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat_all()),
-                                                                                   '</br> Cell: ', info_all[,1],
-                                                                                   '</br> Batch: ', info_all[,3]),
-                                 hovermode="closest"
-                     ) %>%
-                     
-                     onRender("
-                              function(el, x) {
-                              el.on('plotly_click', function(d) {
-                              // d.points is an array of objects which, in this case,
-                              // is length 1 since the click is tied to 1 point.
-                              var pt = d.points[0];
-                              var url = pt.data.info[pt.pointNumber];
-                              // DISCLAIMER: this won't work from RStudio
-                              window.open(url);
-                              });
-                              }
-                              ")
-                   
-                              }
-                              })
-  
-  
-  output$kbet  <- renderPlot({
-    kbet<- kBET(dat(), info_var[,4])
-    plot.data <- data.frame(class=rep(c('observed', 'expected'), 
-                                      each=length(kbet$stats$kBET.observed)), 
-                            data =  c(kbet$stats$kBET.observed,
-                                      kbet$stats$kBET.expected))
-    g <- ggplot(plot.data, aes(class, data)) + geom_boxplot() + 
-      labs(x='Test', y='Rejection rate',title='kBET test results') +
-      theme_bw() +  
-      scale_y_continuous(limits=c(0,1))
-    g
+    ggplotly(g,tooltip = "text")
   })
-  
-  
-  output$compare  <- renderPlot({
-    set.seed(10)
-    rtsne=Rtsne(prcomp(t((raw_var)),scale=T)$x[,1:50])$Y  
-    rownames(rtsne)=colnames(raw_var)
-    tsne_unc=as.data.frame(rtsne)
-    
-    set.seed(10)
-    rtsne=Rtsne(prcomp(t((mnn_var)),scale=T)$x[,1:50])$Y  
-    rownames(rtsne)=colnames(mnn_var)
-    tsne_mnn=as.data.frame(rtsne)
-    
-    set.seed(10)
-    rtsne=Rtsne(prcomp(t((iter_var)),scale=T)$x[,1:50])$Y  
-    rownames(rtsne)=colnames(iter_var)
-    tsne_iter=as.data.frame(rtsne)
-    
-    dd_unc <- as.matrix(dist(tsne_unc)) #all.dists2_unc#
-    dd_mnn <- as.matrix(dist(tsne_mnn))#all.dists2.c#
-    dd_iter <- as.matrix(dist(tsne_iter))#all.dists2.c#
-    diag(dd_unc)=10000
-    min_unc=apply(dd_unc, 1, FUN=which.min)
-    n=c(1:length(min_unc))
-    close=unlist(lapply(n, function(i) ifelse(info_var[,1][min_unc[i]]==info_var[,1][i],1,0)))
-    
-    
-    diag(dd_mnn)=10000
-    min_mnn=apply(dd_mnn, 1, FUN=which.min)
-    
-    close=unlist(lapply(n, function(i) ifelse(info_var[,1][min_mnn[i]]==info_var[,1][i],1,0)))
-    mean(close)
-    
-    diag(dd_iter)=10000
-    min_iter=apply(dd_iter, 1, FUN=which.min)
-    close=unlist(lapply(n, function(i) ifelse(info_var[,1][min_iter[i]]==info_var[,1][i],1,0)))
-    mean(close)
-    
-    ## neighbor 
-    min.n <- function(x,n){ 
-      s <- sort(x, index.return=TRUE) 
-      s$ix[c(1:n)]
-    }
-    min_unc=lapply(c(1:nrow(dd_unc)), function(i) FUN=min.n(dd_unc[,i],10))
-    close_unc=data.frame(lapply(c(1:nrow(dd_unc)), function(i) ifelse(info_var[,1][min_unc[[i]]]==info_var[,1][i],1,-1)))
-    ave_unc=colMeans(close_unc)
-    closedist_unc = colMeans(data.frame(lapply(c(1:nrow(dd_unc)), function(i) close_unc[,i]/dd_unc[min_unc[[i]],i])))
-    
-    min_mnn=lapply(c(1:nrow(dd_mnn)), function(i) FUN=min.n(dd_mnn[,i],10))
-    close_mnn=data.frame(lapply(c(1:nrow(dd_mnn)), function(i) ifelse(info_var[,1][min_mnn[[i]]]==info_var[,1][i],1,-1)))
-    ave_mnn=colMeans(close_mnn)
-    closedist_mnn = colMeans(data.frame(lapply(c(1:nrow(dd_mnn)), function(i) close_mnn[,i]/dd_mnn[min_mnn[[i]],i])))
-    
-    min_iter=lapply(c(1:nrow(dd_iter)), function(i) FUN=min.n(dd_iter[,i],10))
-    close_iter=data.frame(lapply(c(1:nrow(dd_iter)), function(i) ifelse(info_var[,1][min_iter[[i]]]==info_var[,1][i],1,-1)))
-    ave_iter=colMeans(close_iter)
-    closedist_iter = colMeans(data.frame(lapply(c(1:nrow(dd_iter)), function(i) close_iter[,i]/dd_iter[min_iter[[i]],i])))
-    
 
-    ave_dist<-cbind(closedist_unc,closedist_mnn,closedist_iter)
-    
-    boxplot(ave_dist,main="",names=c("Uncorrected","MNN",'iter'),lwd=4,,ylim=c(-10,10),ylab="10 nearest neighbor distance (1,-1),k=15",
-            xlab = paste0('Mean: unc =',round(mean(closedist_unc),4), 
-                          ' mnn=',round(mean(closedist_mnn),4), 
-                          ' iter=',round(mean(closedist_iter),4)
-            ))
-  })
-    
+  
     
 }
 
