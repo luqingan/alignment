@@ -33,12 +33,16 @@ library(lmtest)
 library(DT)
 library(Rtsne)
 library(plotly)
-library(scran)
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("preprocessCore")
 library(preprocessCore)
 library(htmlwidgets)
 load("raw.rda")
 load("info.rda")
-rna <- readRDS("/Users/alice/Documents/research/alignment/newdata/shiny/Alignment/RNA_data_norm_hg19_all.rds")
+load("mnn.rda")
+load("iter.rda")
+load('ave_dist.rda')
+rna <- readRDS("RNA_data_norm_hg19_all.rds")
 
 ui <-  shinyUI(navbarPage("APP",
                           tabPanel("APP", fluidPage(
@@ -116,23 +120,27 @@ ui <-  shinyUI(navbarPage("APP",
                               # Show a plot of the generated distribution
                               mainPanel(
                                   tabsetPanel(
+                                    tabPanel("PCA", 
+                                             h4('PCA plot'),
+                                             plotlyOutput('pca1')
+                                    ), 
                                     tabPanel("Tsne", 
                                              verbatimTextOutput("impo"),
                                              h4('Tsne plot'),
                                              plotlyOutput('plot1')
                                              ), 
-                                    tabPanel("PCA", 
-                                             h4('PCA plot'),
-                                             plotlyOutput('pca1')
-                                             ), 
+                                    
                                     tabPanel("Gene expression", 
                                              h4('Gene expression heatmap'),
-                                             plotlyOutput('heat')
+                                             plotlyOutput('heat'),
+                                             plotlyOutput('heat_pca')
                                              ),
                                     tabPanel("Gene expression curve", 
                                              h4('Gene expression curve'),
                                              verbatimTextOutput('curve_text'),
-                                             plotlyOutput('curve')
+                                             plotlyOutput('curve'),
+                                             plotlyOutput('pca_curve')
+                                             
                                     ),
                                     tabPanel("Correction methods evaluation", 
                                              plotOutput('kbet'),
@@ -268,7 +276,6 @@ pos_sel <- reactive ({
   }else{
     layer_pos = which(layer%in%input$sel_layer)
   }
-  
   if (length(input$sel_cancer)==0){
     cancer_pos = c(1:length(cell))
   }else{
@@ -284,7 +291,19 @@ pos_sel <- reactive ({
 
   
   dat_sel = reactive({
-    normalize.quantiles(as.matrix(raw[,pos_sel()]),copy=TRUE)
+    if (input$corr=='uncorrected'){
+     d= normalize.quantiles(as.matrix(raw[,pos_sel()]),copy=TRUE)
+     colnames(d) = colnames(raw)
+     d
+    }else if (input$corr=='mnn'){
+      d=normalize.quantiles(as.matrix(mnn[,pos_sel()]),copy=TRUE)
+      colnames(d) = colnames(raw)
+      d
+    }else{
+      normalize.quantiles(as.matrix(iter[,pos_sel()]),copy=TRUE)
+      colnames(d) = colnames(raw)
+      d
+    }
   })
   
   cell_sel = reactive({
@@ -322,27 +341,30 @@ pos_sel <- reactive ({
     }
   })
 
-  dat_var = reactive({
+  dat = reactive({
     dat_sel()[,keep()]
   })
   
+  info_var= reactive({
+    info[pos(),]
+ })
 
  cell_var = reactive({
-   cell[pos()]
+   info_var()[,1]
  })
  layer_var = reactive({
-   layer[pos()]
+   info_var()[,5]
  }) 
  bio_var = reactive({
-   bio[pos()]
+   info_var()[,6]
  }) 
  cancer_var = reactive({
-   cancer[pos()]
+   info_var()[,2]
  })
- 
  batch_var = reactive({
    batch[pos()]
  })
+ 
  bat_var = reactive({
    bat[pos()]
  })
@@ -379,23 +401,7 @@ pos_sel <- reactive ({
   shape
  })
 
- dat = reactive({
-   if (input$corr=='uncorrected'){
-     dat_var()
-   }else if (input$corr=='mnn'){
-     mnn_out=mnnCorrect(as.matrix(dat_var()[,which(bat_var()==1)]),as.matrix(dat_var()[,which(bat_var()==2)]),compute.angle=TRUE,k=15)
-     X_mnn<-do.call(cbind, mnn_out$corrected)
-     X_mnn
-   # }else{
-   #   mnn_out=mnnCorrect(as.matrix(dat_var()[,which(batch_var()=='Predicted DNase')]),as.matrix(dat_var()[,which(batch_var()=='True DNase')]),compute.angle=TRUE,k=15)
-   #   X_mnn<-do.call(cbind, mnn_out$corrected)
-   #   for (i in 1:100){
-   #     iter_mnn=mnnCorrect(as.matrix(X_mnn[,which(batch_var()=='Predicted DNase')]),as.matrix(X_mnn[,which(batch_var()=='True DNase')]),compute.angle=TRUE,k=15)
-   #     iter_X<-do.call(cbind, iter_mnn$corrected)
-   #   }
-   #   iter_X
-    }
-})
+
 
  tsne = reactive({
        set.seed(10)
@@ -406,8 +412,8 @@ pos_sel <- reactive ({
        tsne
  })
 
- dat_cv = reactive({
-   raw = dat()
+dat_cv = reactive({
+ raw = dat()
  cv = apply(raw,1,sd)/rowMeans(raw)
  raw[which(cv>0),]
 })
@@ -439,6 +445,7 @@ pca = reactive({
   rna_curve = reactive({
     rna[,which(cell_rna()%in%input$celltype)]
   })
+  
   dd = reactive({
     if (length(input$gene2)==1){
       dd = data.frame(cbind(pca_curve()$PC1,rna_curve()[gene_curve(),]))
@@ -464,8 +471,7 @@ pca = reactive({
   })
 
   # output$impo <- renderPrint({
-  # class(line())
-  #   head(line())
+  #   cate_color()[which(cell_rna()%in%input$celltype)]
   #   })
 
 
@@ -482,6 +488,7 @@ pca = reactive({
   # })
   
   output$curve =renderPlotly({
+    if (!is.null(long())&!is.null(line())&!is.null(input$celltype)&!is.null(input$gene2)){
     long=long()
     line=line()
     plot_ly(long, x = ~PC1, y = ~gene, type = 'bar',
@@ -504,10 +511,26 @@ pca = reactive({
                tickfont = list(
                  size = 14,
                  color = 'rgb(107, 107, 107)')))
+    }
   })
 
-
+  output$pca_curve <- renderPlotly({
+    if (!is.null(pca_curve())){
+      
+      plot_ly(pca_curve(), x = ~PC1, y = ~PC2,
+              color = cell_var()[which(cell_rna()%in%input$celltype)],colors='Set1',
+              symbol= ~cell_var()[which(cell_rna()%in%input$celltype)] ,symbols =shape_var()[which(cell_rna()%in%input$celltype)],  marker=list(size=10, opacity=0.7)) %>%
+        add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat())[which(cell_rna()%in%input$celltype)],
+                                                    '</br> Cell: ', cell_var()[which(cell_rna()%in%input$celltype)],
+                                                    '</br> Batch: ', batch_var()[which(cell_rna()%in%input$celltype)]),
+                    hovermode="closest"
+        )
+    }
+  })
+  
   output$plot1 <- renderPlotly({
+    if (!is.null(tsne())){
+      
     if (length(input$search) == 0) {
       plot_ly(tsne(), x = ~Tsne1, y = ~Tsne2,
             color = cate_color(),colors='Set1',
@@ -529,11 +552,14 @@ pca = reactive({
                                  hovermode="closest"
                      )
 
-                              }
+                 }
+    }
                               })
 
 
   output$pca1 <- renderPlotly({
+    if (!is.null(pca())){
+      
     if (length(input$search) == 0) {
       plot_ly(pca(), x = ~PC1, y = ~PC2,
               color = cate_color(),colors='Set1',
@@ -555,11 +581,13 @@ pca = reactive({
                                                                                '</br> Batch: ', batch_var()),
                                  hovermode="closest"
                      )
-                              }
+           }
+    }
                               })
 
 
   output$heat =renderPlotly({
+    if (!is.null(tsne())){
     tsne=tsne()[which(batch_var()=='Predicted DNase'),]
     pos = pos()[pos() <= ncol(rna)]
     z = rna[pos_gene(),pos]
@@ -576,14 +604,46 @@ pca = reactive({
       geom_raster()+
       scale_fill_gradientn(colours = mycol,limits=range(z),'Gene expression level')+
       theme_classic()+
-    ggtitle(paste0('Gene expression heatmap of',input$gene))
-    
-
+    ggtitle(paste0('Gene expression Tsne heatmap of ',input$gene))
     ggplotly(g,tooltip = "text")
+    }
   })
 
-  
-    
+  output$heat_pca =renderPlotly({
+    if (!is.null(pca())){
+      
+    pca=pca()[which(batch_var()=='Predicted DNase'),]
+    pos = pos()[pos() <= ncol(rna)]
+    z = rna[pos_gene(),pos]
+    cell = cell_var()[which(batch_var()=='Predicted DNase')]
+    x = pca$PC1
+    y =pca$PC2
+    s <- interp(x,y,z)
+    d <- melt(s$z, na.rm = TRUE)
+    names(d) <- c("x", "y", "z")
+    d$PC1 <- s$x[d$x]
+    d$PC2 <- s$y[d$y]
+    mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
+    g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("Gene expression level:",z)))+
+      geom_raster()+
+      scale_fill_gradientn(colours = mycol,limits=range(z),'Gene expression level')+
+      theme_classic()+
+      ggtitle(paste0('Gene expression PCA heatmap of ',input$gene))
+    ggplotly(g,tooltip = "text")
+    }
+  })
+  # 
+  # output$compare  <- renderPlot({
+  #   closedist_unc = ave_dist[,1]
+  #   closedist_mnn = ave_dist[,2]
+  #   closedist_iter = ave_dist[,3]
+  #   boxplot(ave_dist,main="",names=c("Uncorrected","MNN",'iter'),lwd=4,ylim=c(-10,10),ylab="10 nearest neighbor distance (1,-1),k=15",
+  #           xlab = paste0('Mean: unc =',round(mean(closedist_unc),4),
+  #                         ' mnn=',round(mean(closedist_mnn),4),
+  #                         ' iter=',round(mean(closedist_iter),4)
+  #           ))
+  # })
+  #   
 }
 
 shinyApp(ui = ui, server = server)
