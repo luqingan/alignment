@@ -1,7 +1,6 @@
-
+##all
 library(shiny)
 library(kBET)
-
 library(ggplot2)
 library(reshape2)
 library(matrixStats)
@@ -67,6 +66,7 @@ load('pred_tf.rda')
 
 
 rna <- readRDS("RNA_data_norm_hg19_all_name.rds")
+DHScluster <- as.numeric(readLines("DH_cluster_2000_hg19_all.txt"))
 
 ui <-  shinyUI(navbarPage("APP",
                           tabPanel("APP", fluidPage(
@@ -74,14 +74,13 @@ ui <-  shinyUI(navbarPage("APP",
                             sidebarLayout(
                               sidebarPanel(
                                 h3('Data processing'),
-                                helpText("Upload dataset"),
-                                # Input: Select a file ----
-                                fileInput("file1", "Upload DNase CSV File",
-                                          multiple = TRUE,
-                                          accept = c("text/csv",
-                                                     "text/comma-separated-values,text/plain",
-                                                     ".csv")),
-                                #selectInput('search','Search',multiple = T),
+                                # checkboxInput('upload', "Upload dataset"),
+                                # conditionalPanel(
+                                #   condition = "input.cate== true",
+                                #   fileInput("file1", "Upload DNase CSV File")
+                                # ),
+                                # checkboxInput("new", label = 'Show new data'),
+                                # #selectInput('search','Search',multiple = T),
                                 uiOutput('search'),
                                 h3('Plotting option'),
                                 checkboxInput("cate", label = 'Plot by category'),
@@ -265,9 +264,15 @@ ui <-  shinyUI(navbarPage("APP",
                                   ),
                                   tabPanel("Gene expression curve", 
                                            h4('Gene expression curve'),
+                                           verbatimTextOutput("impo"),
+                                           
+                                           verbatimTextOutput('curve_text'),
+                                           verbatimTextOutput('exon_curve_text'),
+                                           verbatimTextOutput('intron_curve_text'),
                                            
                                            plotlyOutput('curve')%>% withSpinner(),
-                                           plotOutput('pca_curve')%>% withSpinner()
+                                           plotOutput('pca_curve')%>% withSpinner(),
+                                           plotlyOutput('pca_gene')%>% withSpinner()
                                            
                                   ),
                                   
@@ -332,10 +337,7 @@ ui <-  shinyUI(navbarPage("APP",
                                   ),
                                   tabPanel("Correction methods evaluation",
                                            # 
-                                           # verbatimTextOutput("impo"),
-                                           # 
-                                           # verbatimTextOutput('curve_text'),
-                                           # verbatimTextOutput('enhancer_curve_text'),
+                
                                           # plotOutput('dist'),
                                            plotOutput('silhouette'),
                                           # plotOutput('entropies'),
@@ -357,20 +359,6 @@ ui <-  shinyUI(navbarPage("APP",
 
 
 server <- function(input, output) {
-  ##data 
-  newdata <- reactive({
-    infile <- input$file1
-    if (is.null(infile)) {
-      # User has not uploaded a file yet
-      return(NULL)
-    }
-    read.csv(infile$datapath)
-  })
-  
-  new_sample = reactive({
-    colnames(newdata)
-  })
-  
     cell=info[,1]
     cancer = info[,2]
     batch=info[,3]
@@ -452,33 +440,7 @@ server <- function(input, output) {
       })
 
 
-    #
-    #   ######### promoter
-      output$gene_pro <- renderUI({
-        selectizeInput("gene_pro",
-                       label = "Promoter of Interest",
-                       choices = rownames(true_promoter),
-                       multiple = F,
-                       options = list(placeholder = 'Select promoters')
-        )
-      })
-      output$gene_pro2 <- renderUI({
-        selectizeInput("gene_pro2",
-                       label = "Promoter of Interest",
-                       choices = rownames(true_promoter),
-                       multiple = T,
-                       options = list(maxItems = nrow(true_promoter),placeholder = 'Select promoters')
-        )
-      })
-
-      output$celltype_pro <- renderUI({
-        selectizeInput("celltype_pro",
-                       label = "Cell types of Interest",
-                       choices = cell_predicted(),#change
-                       multiple = T,
-                       options = list(placeholder = 'Select cell types')
-        )
-      })
+    
     # 
       #######exon
       output$gene_exon <- renderUI({
@@ -865,14 +827,7 @@ server <- function(input, output) {
       shape
     })
     
-    tsne = reactive({
-      set.seed(10)
-      rtsne=Rtsne(prcomp(t((dat())),scale=T)$x[,1:50])$Y
-      rownames(rtsne)=colnames(dat())
-      tsne=as.data.frame(rtsne)
-      colnames(tsne)=c('Tsne1','Tsne2')
-      tsne
-    })
+
     
     del_cv =  reactive({
       dd = dat()
@@ -884,12 +839,22 @@ server <- function(input, output) {
       dd = dat()
       dd[del_cv(),]
     })
+
     
-    rna_cv = reactive({
-      dd = rna_dat()
-      dd[del_cv(),]
+    pca = reactive({
+      pca_unc=prcomp(t((dat_cv())),scale=T)$x
+      pca_unc = as.data.frame(pca_unc)
+      pca_unc
     })
     
+    tsne = reactive({
+      set.seed(10)
+      rtsne=Rtsne(prcomp(t((dat_cv())),scale=T)$x[,1:50])$Y
+      rownames(rtsne)=colnames(dat_cv())
+      tsne=as.data.frame(rtsne)
+      colnames(tsne)=c('Tsne1','Tsne2')
+      tsne
+    })
     ## promoter data  
     
     rep_pro = reactive({
@@ -907,6 +872,7 @@ server <- function(input, output) {
       }
     })
     
+
     ########exon
     rep_exon = reactive({
       na.omit(match(colnames(exon_true_dat()),colnames(exon_pred_dat())))
@@ -970,11 +936,7 @@ server <- function(input, output) {
         cbind(enhancer_pred_dat()[,-rep_enhancer()],enhancer_true_dat())
       }
     })
-    pca = reactive({
-      pca_unc=prcomp(t((dat_cv())),scale=T)$x
-      pca_unc = as.data.frame(pca_unc)
-      pca_unc
-    })
+ 
     
     pos_sample <- reactive ({
       match(input$search,colnames(dat()))
@@ -1010,17 +972,20 @@ server <- function(input, output) {
     
     
     #################################
-    
+    pos_new = reactive({
+      c(1:ncol(DNase_new()))
+    })
+
     output$plot1 <- renderPlotly({
       if (!is.null(tsne())){
-        if (length(input$search) == 0) {
+          if (length(input$search) == 0) {
           plot_ly(tsne(), x = ~Tsne1, y = ~Tsne2,
                   color = cate_color(),colors='Set1',
                   symbol=~cate_shape(),symbols =shape_var(),  marker=list(size=10, opacity=0.7)) %>%
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
                                                         '</br> Cell: ', cell_var(),
                                                         '</br> Batch: ', batch_var()))
-        }else{
+          }else{
           group = rep('unselected',ncol(dat()))
           group[pos_sample()] = cate_color()[pos_sample()]
           plot_ly(tsne(), x = ~Tsne1, y = ~Tsne2,
@@ -1031,7 +996,6 @@ server <- function(input, output) {
                                                         '</br> Batch: ', batch_var()))
         }
       }
-      
     })
     
     
@@ -1059,7 +1023,7 @@ server <- function(input, output) {
     
     mc = reactive({
       cell_mc = cell_predicted() 
-      data_mc = rna_cv()
+      data_mc = dat_predicted()
       dd = data_mc[,which(cell_mc%in%celltype())]
       colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype())]
       set.seed(10)
@@ -1071,14 +1035,13 @@ server <- function(input, output) {
     })
     
     time = reactive({
-      data_time = rna_cv()
+      data_time = rna_dat()
       if (length(input$gene2) == 1){
         type = rna[gene_curve(),which(colnames(data_time)%in%order())]
         order = na.omit(match(order(),names(type)))
         type[order]
       }else{
         type = rna[gene_curve(),which(colnames(data_time)%in%order())]
-        type
         order = na.omit(match(order(),colnames(type)))
         type[,order]
       }
@@ -1094,8 +1057,20 @@ server <- function(input, output) {
       line = t(sapply(1:length(gene2()),function(i) fitted(loess(time()[i,] ~ c(1:ncol(time()))))))
       melt(line)
     })
-    
-    
+    # 
+    # output$impo <- renderPrint({
+    #   cell_predicted()[which(cell_predicted()%in%celltype())]
+    # })
+    # output$curve_text <- renderPrint({
+    #   cell_pro()[which(cell_pro()%in%celltype_pro())]
+    # })
+    # 
+    # output$exon_curve_text <- renderPrint({
+    #   cell_exon()[which(cell_exon()%in%celltype_pro())]
+    # })
+    # output$intron_curve_text <- renderPrint({
+    #  mc_pro()
+    # })
     
     output$curve =renderPlotly({
       if (length(input$gene2) == 1){
@@ -1107,7 +1082,10 @@ server <- function(input, output) {
         plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  'WASH7P',
                 marker = list(opacity=0.5,width = 2)) %>% 
           add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
-          ) %>%
+          ) %>%          
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%celltype())],
+                                                                     '</br> Gene: ', long$Var1,
+                                                                     '</br> Sample: ',long$Var2))%>%
           layout(title = paste0( 'Gene expression curve of ',celltype()),
                  xaxis = list(
                    title = "Pseudotime",
@@ -1123,17 +1101,18 @@ server <- function(input, output) {
                    tickfont = list(
                      size = 14,
                      color = 'rgb(107, 107, 107)')))
-        
       }else{
         long=long()
         line=line()
-        
         plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                color = ~Var1,
+                color = ~ Var1,
                 marker = list(opacity=0.5,width = 2)) %>%
           add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                     color = ~long$Var1,
                     showlegend = F)  %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%celltype())],
+                                                      '</br> Gene: ', long$Var1,
+                                                      '</br> Sample: ',long$Var2))%>%
           layout(title = paste0( 'Gene expression curve of ',celltype()),
                  xaxis = list(
                    title = "Pseudotime",
@@ -1152,9 +1131,24 @@ server <- function(input, output) {
       }
     })
     
+    output$pca_gene <- renderPlot({
+      if (!is.null(input$celltype)){
+      dd = dat_predicted()[,which(cell_predicted()%in%celltype())]
+      colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype())]
+      cell = cell_predicted()[which(cell_predicted()%in%celltype())]
+      pca = as.data.frame(prcomp(t(dd),scale=T)$x)
+      batch = (batch_var()[[which(batch_var()=='Predicted DNase')]])[which(cell_predicted()%in%celltype())]
+      plot_ly(pca, x = ~PC1, y = ~PC2,
+              color = cell,colors='Set1',
+              symbol= ~cell ,symbols = cell,  marker=list(size=10, opacity=0.7)) %>%
+        add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dd),
+                                                    '</br> Cell: ', cell,
+                                                    '</br> Batch: ', batch))
+      }
+    })
+ 
     output$pca_curve <- renderPlot({
       if (!is.null(input$celltype)){
-        
         cell_time = cell_predicted()[which(cell_predicted()%in%celltype())]
         mc=mc()
         cell_line=unique(cell_time)
@@ -1191,8 +1185,6 @@ server <- function(input, output) {
       }
       
     })
- 
-    
     
     output$heat =renderPlotly({
       if (!is.null(tsne())){
@@ -1268,7 +1260,14 @@ server <- function(input, output) {
     })
 
       mc_pro = reactive({
-        data_mc = pro_dat()
+       if (input$data_type_pro == 'pro_true'){
+         data_mc = dat_true()
+        }else if (input$data_type_pro == 'pro_pred'){
+         data_mc = dat_predicted()
+        }else if (input$data_type_pro == 'pro_both'){
+          ### replicate sample, use true data 
+          data_mc = cbind(dat_predicted()[,-rep_pro()],dat_true())
+        }
         cell_mc = cell_pro()
         dd = data_mc[,which(cell_mc%in%celltype_pro())]
         colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_pro())]
@@ -1317,6 +1316,9 @@ server <- function(input, output) {
                   marker = list(opacity=0.5,width = 2)) %>% 
             add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
             ) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_pro()[which(cell_pro()%in%celltype_pro())],
+                                                        '</br> Gene: ', long$Var1,
+                                                        '</br> Sample: ',long$Var2))%>%
             layout(title = paste0( 'Promoter expression curve of ',celltype_pro()),
                    xaxis = list(
                      title = "Pseudotime",
@@ -1342,6 +1344,9 @@ server <- function(input, output) {
             add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                       color = ~long$Var1,
                       showlegend = F)  %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_pro()[which(cell_pro()%in%celltype_pro())],
+                                                        '</br> Gene: ', long$Var1,
+                                                        '</br> Sample: ',long$Var2))%>%
             layout(title = paste0( 'Promoter expression curve of ',celltype_pro()),
                    xaxis = list(
                      title = "Pseudotime",
@@ -1399,16 +1404,9 @@ server <- function(input, output) {
 
       })
 
-     tsne_pro = reactive({
-       if (input$data_type_pro == 'pro_true'){
-         tsne()[which(batch_var()=='True DNase'),]
-       }else if (input$data_type_pro == 'pro_pred'){
-         tsne()[which(batch_var()=='Predicted DNase'),]
-       }else if (input$data_type_pro == 'pro_both'){
-         ### replicate sample, use true data
-         tsne()[-rep_pro(),]
-       }
-     })
+      
+ 
+      
 
       output$heat_promoter =renderPlotly({
         if (!is.null(tsne())){
@@ -1487,7 +1485,13 @@ server <- function(input, output) {
       })
 
       mc_exon = reactive({
-        data_mc = exon_dat()
+        if (input$data_type_exon == 'exon_true'){
+          data_mc = dat_true()
+        }else if (input$data_type_exon == 'exon_pred'){
+          data_mc = dat_predicted()
+        }else if (input$data_type_exon == 'exon_both'){
+          data_mc = cbind(dat_predicted()[,-rep_exon()],dat_true())
+        }
         cell_mc = cell_exon()
         dd = data_mc[,which(cell_mc%in%celltype_exon())]
         colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_exon())]
@@ -1536,6 +1540,10 @@ server <- function(input, output) {
                   marker = list(opacity=0.5,width = 2)) %>% 
             add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
             ) %>%
+            
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_exon()[which(cell_exon()%in%celltype_exon())],
+                                                        '</br> Gene: ', long$Var1,
+                                                        '</br> Sample: ',long$Var2))%>%
             layout(title = paste0( 'Exon expression curve of ',celltype_exon()),
                    xaxis = list(
                      title = "Pseudotime",
@@ -1560,7 +1568,10 @@ server <- function(input, output) {
                   marker = list(opacity=0.5,width = 2)) %>%
             add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                       color = ~long$Var1,
-                      showlegend = F)  %>%
+                      showlegend = F)  %>%         
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_exon()[which(cell_exon()%in%celltype_exon())],
+                                                                                                  '</br> Gene: ', long$Var1,
+                                                                                                  '</br> Sample: ',long$Var2))%>%
             layout(title = paste0( 'Exon expression curve of ',celltype_exon()),
                    xaxis = list(
                      title = "Pseudotime",
@@ -1703,7 +1714,14 @@ server <- function(input, output) {
       })
 
       mc_intron = reactive({
-        data_mc = intron_dat()
+        if (input$data_type_intron == 'intron_true'){
+          data_mc = dat_true()
+        }else if (input$data_type_intron == 'intron_pred'){
+          data_mc = dat_predicted()
+        }else if (input$data_type_intron == 'intron_both'){
+          ### replicate sample, use true data 
+          data_mc = cbind(dat_predicted()[,-rep_intron()],dat_true())
+        }
         cell_mc = cell_intron()
         dd = data_mc[,which(cell_mc%in%celltype_intron())]
         colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_intron())]
@@ -1752,6 +1770,10 @@ server <- function(input, output) {
                   marker = list(opacity=0.5,width = 2)) %>% 
             add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
             ) %>%
+            
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_intron()[which(cell_intron()%in%celltype_intron())],
+                                                        '</br> Gene: ', long$Var1,
+                                                        '</br> Sample: ',long$Var2))%>%
             layout(title = paste0( 'Intron curve of ',celltype_intron()),
                    xaxis = list(
                      title = "Pseudotime",
@@ -1777,6 +1799,9 @@ server <- function(input, output) {
             add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                       color = ~long$Var1,
                       showlegend = F)  %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_intron()[which(cell_intron()%in%celltype_intron())],
+                                                        '</br> Gene: ', long$Var1,
+                                                        '</br> Sample: ',long$Var2))%>%
               layout(title = paste0( 'Intron expression curve of ',celltype_intron()),
                    xaxis = list(
                      title = "Pseudotime",
@@ -1917,7 +1942,14 @@ server <- function(input, output) {
       })
 
       mc_enhancer = reactive({
-        data_mc = enhancer_dat()
+        if (input$data_type_enhancer == 'enhancer_true'){
+          data_mc = dat_true()
+        }else if (input$data_type_enhancer == 'enhancer_pred'){
+          data_mc = dat_predicted()
+        }else if (input$data_type_enhancer == 'enhancer_both'){
+          ### replicate sample, use true data 
+          data_mc = cbind(dat_predicted()[,-rep_enhancer()],dat_true())
+        }
         cell_mc = cell_enhancer()
         dd = data_mc[,which(cell_mc%in%celltype_enhancer())]
         colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_enhancer())]
@@ -1966,6 +1998,9 @@ server <- function(input, output) {
                   marker = list(opacity=0.5,width = 2)) %>% 
             add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
             )  %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_enhancer()[which(cell_enhancer()%in%celltype_enhancer())],
+                                                        '</br> Gene: ', long$Var1,
+                                                        '</br> Sample: ',long$Var2))%>%
             layout(title = paste0( 'Enhancer curve of ',celltype_enhancer()),
                    xaxis = list(
                      title = "Pseudotime",
@@ -1991,10 +2026,13 @@ server <- function(input, output) {
             add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                       color = ~long$Var1,
                       showlegend = F)  %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_enhancer()[which(cell_enhancer()%in%celltype_enhancer())],
+                                                        '</br> Gene: ', long$Var1,
+                                                        '</br> Sample: ',long$Var2))%>%
             layout(title = paste0( 'Enhancer expression curve of ',celltype_enhancer()),
                    xaxis = list(
                      title = "Pseudotime",
-                     showticklabels = FALSE,
+                     #showticklabels = FALSE,
                      tickfont = list(
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
@@ -2131,7 +2169,14 @@ server <- function(input, output) {
     })
 
     mc_tf = reactive({
-      data_mc = tf_dat()
+      if (input$data_type_tf == 'tf_true'){
+        data_mc = dat_true()
+      }else if (input$data_type_tf == 'tf_pred'){
+        data_mc = dat_predicted()
+      }else if (input$data_type_tf == 'tf_both'){
+        ### replicate sample, use true data 
+        data_mc = cbind(dat_predicted()[,-rep_tf()],dat_true())
+      }
       cell_mc = cell_tf()
       dd = data_mc[,which(cell_mc%in%celltype_tf())]
       colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_tf())]
@@ -2180,6 +2225,9 @@ server <- function(input, output) {
                 marker = list(opacity=0.5,width = 2)) %>% 
           add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
           ) %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_tf()[which(cell_tf()%in%celltype_tf())],
+                                                      '</br> Gene: ', long$Var1,
+                                                      '</br> Sample: ',long$Var2))%>%
           layout(title = paste0( 'Transcription factor curve of ',celltype_tf()),
                  xaxis = list(
                    title = "Pseudotime",
@@ -2205,6 +2253,9 @@ server <- function(input, output) {
           add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                     color = ~long$Var1,
                     showlegend = F)  %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_tf()[which(cell_tf()%in%celltype_tf())],
+                                                      '</br> Gene: ', long$Var1,
+                                                      '</br> Sample: ',long$Var2))%>%
           layout(title = paste0( 'Transcription factor expression curve of ',celltype_tf()),
                  xaxis = list(
                    title = "Pseudotime",
@@ -2577,22 +2628,7 @@ server <- function(input, output) {
  #            ))
  # })
  
- output$impo <- renderPrint({
-   dim(closedist_unc())
- })
- 
- output$curve_text <- renderPrint({
-   ave_dist<-cbind(closedist_unc(),closedist_comb(),closedist_mnn(),closedist_iter())
-   dim(ave_dist())
- })
- 
- output$exon_curve_text <- renderPrint({
-   dd_unc = dd_unc()
-   diag(dd_unc)=10000
-   min_unc = lapply(c(1:nrow(dd_unc)), function(i) FUN=min.n(dd_unc[,i],10))
-   dim(min_unc())
- })
-    #
+ #
     # output$compare  <- renderPlot({
     #   closedist_unc = ave_dist[,1]
     #   closedist_mnn = ave_dist[,2]
