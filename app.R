@@ -14,6 +14,9 @@ library(crosstalk)
 library(tidyr)
 library(dplyr)
 library (randomForest)
+library(biomaRt)
+library(org.Mm.eg.db)
+library(topGO)
 library (tree)
 library(gridExtra)
 library(htmlwidgets)
@@ -135,29 +138,33 @@ ui <-  shinyUI(navbarPage("APP",
                                   )
                                 ),
                                 
-                                h3("Gene expression plots"),
-                                checkboxInput("geneexpre", 'Gene expression heatmap'),
+                                
+                                h3("Heatmap"),
+                                checkboxInput("heat", 'Heatmap'),
                                 conditionalPanel(
-                                  condition = "input.geneexpre == true",
-                                  uiOutput('gene')
-                                ),
-                                checkboxInput("genecurve", 'Gene expression curve'),
+                                  condition = "input.heat == true",
+                                  checkboxInput("geneexpre", 'Gene expression heatmap'),
+                                    uiOutput('gene'),
+                                    uiOutput('gene_pro'),
+                                    uiOutput('gene_exon'),
+                                    uiOutput('gene_intron'),
+                                    uiOutput('gene_enhancer'),
+                                    uiOutput('gene_tf')
+                                ), 
+                                
+                                h3("Curves"),
+                                checkboxInput("curve", 'Curves'),
                                 conditionalPanel(
-                                  condition = "input.genecurve == true",
-                                  radioButtons(inputId="data_type_gene", "Data type:",
+                                  condition = "input.curve == true",
+                                  checkboxInput("genecurve", 'Gene expression curve'),
+                                   conditionalPanel(
+                                    condition = "input.genecurve == true",
+                                    radioButtons(inputId="data_type_gene", "Data type:",
                                                choices = list("RNA-seq" = "gene_rna"),inline=TRUE),
                                   
                                   uiOutput('gene2'),
                                   uiOutput('celltype')
                                   ),
-                                
-                                h3("Promoter plots"),
-                                checkboxInput("promoter", 'Promoter heatmap'),
-                                conditionalPanel(
-                                  condition = "input.promoter == true",
-                                  uiOutput('gene_pro')
-                                ),
-
                                 checkboxInput("procurve", 'Promoter curve'),
                                 conditionalPanel(
                                   condition = "input.procurve == true",
@@ -167,14 +174,6 @@ ui <-  shinyUI(navbarPage("APP",
                                   uiOutput('gene_pro2'),
                                   uiOutput('celltype_pro')
                                   ),
-
-                                h3("Exon plots"),
-                                checkboxInput("exon", 'Exon heatmap'),
-                                conditionalPanel(
-                                  condition = "input.exon == true",
-                                  uiOutput('gene_exon')
-                                ),
-
                                 checkboxInput("exoncurve", 'Exon curve'),
                                 conditionalPanel(
                                   condition = "input.exoncurve == true",
@@ -184,15 +183,7 @@ ui <-  shinyUI(navbarPage("APP",
                                   uiOutput('gene_exon2'),
                                   uiOutput('celltype_exon')
                                   ),
-
-                                h3("Intron plots"),
-                                checkboxInput("intron", 'Intron heatmap'),
-                                conditionalPanel(
-                                  condition = "input.intron == true",
-                                  uiOutput('gene_intron')
-                                ),
-
-                                checkboxInput("introncurve", 'Intron curve'),
+                                  checkboxInput("introncurve", 'Intron curve'),
                                 conditionalPanel(
                                   condition = "input.introncurve == true",
                                   radioButtons(inputId="data_type_intron", "Data type:",
@@ -201,14 +192,6 @@ ui <-  shinyUI(navbarPage("APP",
                                   uiOutput('gene_intron2'),
                                   uiOutput('celltype_intron')
                                   ),
-
-                                h3("Enhancer plots"),
-                                checkboxInput("enhancer", 'Enhancer heatmap'),
-                                conditionalPanel(
-                                  condition = "input.enhancer == true",
-                                  uiOutput('gene_enhancer')
-                                ),
-                                
                                 checkboxInput("enhancercurve", 'Enhancer curve'),
                                 conditionalPanel(
                                   condition = "input.enhancercurve == true",
@@ -218,16 +201,6 @@ ui <-  shinyUI(navbarPage("APP",
                                   uiOutput('gene_enhancer2'),
                                   uiOutput('celltype_enhancer')
                                   ),
-                                
-                    
-
-                                h3("Transcription factor plots"),
-                                checkboxInput("tf", 'Transcription factor heatmap'),
-                                conditionalPanel(
-                                  condition = "input.tf == true",
-                                  uiOutput('gene_tf')
-                                ),
-
                                 checkboxInput("tfcurve", 'Transcription factor curve'),
                                 conditionalPanel(
                                   condition = "input.tfcurve == true",
@@ -237,10 +210,18 @@ ui <-  shinyUI(navbarPage("APP",
                                   uiOutput('gene_tf2'),
                                   uiOutput('celltype_tf')
                                   )
+                                ),
+                                h3("Enrichment"),
+                                checkboxInput("enri", 'Enrichment'),
+                                conditionalPanel(
+                                  condition = "input.enri == true",
+                                    uiOutput('celltype_enri'),
+                                    selectizeInput("clus",
+                                                 label = "Cluster of interest",
+                                                 choices = c(1:20),
+                                                 multiple = F)
+                                )
                               ),
-                              
-                              
-                              
                               # Show a plot of the generated distribution
                               mainPanel(
                                 tags$style(type="text/css",
@@ -257,94 +238,86 @@ ui <-  shinyUI(navbarPage("APP",
                                            plotlyOutput('plot1')%>% withSpinner()
                                   ), 
                                   
-                                  tabPanel("Gene expression", 
+                                  tabPanel("Heatmaps", 
                                            h4('Gene expression heatmap'),
-                                           plotlyOutput('heat')%>% withSpinner(),
-                                           plotlyOutput('heat_pca')%>% withSpinner()
+                                           plotlyOutput('heat1')%>% withSpinner(),
+                                           plotlyOutput('heat_pca1')%>% withSpinner(),
+                                           
+
+                                           h4('Promoter heatmap'),
+                                           plotlyOutput('heat_promoter')%>% withSpinner(),
+                                           plotlyOutput('heat_promoter_pca')%>% withSpinner(),
+                                           h4('Exon heatmap'),
+                                           plotlyOutput('heat_exon')%>% withSpinner(),
+                                           plotlyOutput('heat_exon_pca')%>% withSpinner(),
+                                           h4('Intron heatmap'),
+                                           plotlyOutput('heat_intron')%>% withSpinner(),
+                                           plotlyOutput('heat_intron_pca')%>% withSpinner(),
+                                           h4('Enhancer heatmap'),
+                                           plotlyOutput('heat_enhancer')%>% withSpinner(),
+                                           plotlyOutput('heat_enhancer_pca')%>% withSpinner(),
+                                           h4('Transcription factor heatmap'),
+                                           plotlyOutput('heat_tf')%>% withSpinner(),
+                                           plotlyOutput('heat_tf_pca')%>% withSpinner()
                                   ),
                                   tabPanel("Gene expression curve", 
                                            h4('Gene expression curve'),
+                                         
+                                           plotlyOutput('curve1')%>% withSpinner(),
+                                           
+                                           plotOutput('pca_curve')%>% withSpinner(),
+                                           
+                                           h4('Promoter curve'),
+                                           plotlyOutput('promoter_curve')%>% withSpinner(),
+                                           plotOutput('promoter_pca_curve')%>% withSpinner(),
+
+                                           h4('Exon curve'),
+                                           plotlyOutput('exon_curve')%>% withSpinner(),
+                                           plotOutput('exon_pca_curve')%>% withSpinner(),
+
+                                           h4('Intron curve'),
+                                           plotlyOutput('intron_curve')%>% withSpinner(),
+                                           plotOutput('intron_pca_curve')%>% withSpinner(),
+
+                                           h4('Enhancer curve'),
+                                           plotlyOutput('enhancer_curve')%>% withSpinner(),
+                                           plotOutput('enhancer_pca_curve')%>% withSpinner(),
+
+                                           h4('Transcription factor curve'),
+                                           plotlyOutput('tf_curve')%>% withSpinner(),
+                                           plotOutput('tf_pca_curve')%>% withSpinner()
+                                           
+
+                                  ),
+                                  tabPanel("Enrichment", 
+                                           h4('Clustered RNA gene expression curve'),
                                            verbatimTextOutput("impo"),
                                            
                                            verbatimTextOutput('curve_text'),
                                            verbatimTextOutput('exon_curve_text'),
                                            verbatimTextOutput('intron_curve_text'),
+                                           plotlyOutput('rna_curve')%>% withSpinner(),
+                                           h4('GO analysis of chosen cluster'),
                                            
-                                           plotlyOutput('curve')%>% withSpinner(),
-                                           plotOutput('pca_curve')%>% withSpinner(),
-                                           plotlyOutput('pca_gene')%>% withSpinner()
+                                           verbatimTextOutput("go"),
+                                           h4('Clustered promoter expression curve'),
+                                           plotlyOutput('promoter_enri')%>% withSpinner(),
+                                           h4('Clustered exon expression curve'),
+                                           plotlyOutput('exon_enri')%>% withSpinner(),
+                                           h4('Clustered intron expression curve'),
+                                           plotlyOutput('intron_enri')%>% withSpinner()
+                                  )
                                            
-                                  ),
-                                  
-                                  tabPanel("Promoter",
-                                           h4('Promoter heatmap'),
-                                           plotlyOutput('heat_promoter')%>% withSpinner(),
-                                           plotlyOutput('heat_promoter_pca')%>% withSpinner()
-                                  ),
-                                  tabPanel("Promoter curve",
-                                           h4('Promoter curve'),
-                                           plotlyOutput('promoter_curve')%>% withSpinner(),
-                                           plotOutput('promoter_pca_curve')%>% withSpinner()
-
-                                  ),
-                                  tabPanel("Exon",
-                                           h4('Exon heatmap'),
-                                           plotlyOutput('heat_exon')%>% withSpinner(),
-                                           plotlyOutput('heat_exon_pca')%>% withSpinner()
-                                  ),
-                                  tabPanel("Exon curve",
-                                           h4('Exon curve'),
-
-                                           plotlyOutput('exon_curve')%>% withSpinner(),
-                                           plotOutput('exon_pca_curve')%>% withSpinner()
-
-                                  ),
-
-                                  tabPanel("Intron",
-                                           h4('Intron heatmap'),
-                                           plotlyOutput('heat_intron')%>% withSpinner(),
-                                           plotlyOutput('heat_intron_pca')%>% withSpinner()
-                                  ),
-                                  tabPanel("Intron curve",
-                                           h4('Intron curve'),
-                                           
-                                           plotlyOutput('intron_curve')%>% withSpinner(),
-                                           plotOutput('intron_pca_curve')%>% withSpinner()
-
-                                  ),
-                                  tabPanel("Enhancer",
-                                           h4('Enhancer heatmap'),
-                                           plotlyOutput('heat_enhancer')%>% withSpinner(),
-                                           plotlyOutput('heat_enhancer_pca')%>% withSpinner()
-                                  ),
-                                  tabPanel("Enhancer curve",
-                                           h4('Enhancer curve'),
-                                           plotlyOutput('enhancer_curve')%>% withSpinner(),
-                                           plotOutput('enhancer_pca_curve')%>% withSpinner()
-                                           
-                                  ),
-                                  
-                                  tabPanel("Transcription factor",
-                                           h4('Transcription factor heatmap'),
-                                           plotlyOutput('heat_tf')%>% withSpinner(),
-                                           plotlyOutput('heat_tf_pca')%>% withSpinner()
-                                  ),
-                                  tabPanel("Transcription factor curve",
-                                           h4('Transcription factor curve'),
-                                           plotlyOutput('tf_curve')%>% withSpinner(),
-                                           plotOutput('tf_pca_curve')%>% withSpinner()
-
-                                  ),
-                                  tabPanel("Correction methods evaluation",
-                                           # 
-                
-                                          # plotOutput('dist'),
-                                           plotOutput('silhouette'),
-                                          # plotOutput('entropies'),
-                                           plotOutput('k_unc'),
-                                           plotOutput('k_comb'),
-                                           plotOutput('k_mnn'),
-                                           plotOutput('k_iter')
+                                  # tabPanel("Correction methods evaluation",
+                                  #          # 
+                                  # 
+                                  #         # plotOutput('dist'),
+                                  #          plotOutput('silhouette'),
+                                  #         # plotOutput('entropies'),
+                                  #          plotOutput('k_unc'),
+                                  #          plotOutput('k_comb'),
+                                  #          plotOutput('k_mnn'),
+                                  #          plotOutput('k_iter')
                                   )
                                   
                                 )# end of tabset panel
@@ -353,7 +326,7 @@ ui <-  shinyUI(navbarPage("APP",
                             )
                           )
                           ))
-)
+
 
 
 
@@ -399,9 +372,7 @@ server <- function(input, output) {
                      options = list(maxItems = nrow(rna),placeholder = 'Select genes')
       )
     })
-    gene2 = reactive({
-      input$gene2
-    })
+
     output$celltype <- renderUI({
       selectizeInput("celltype",
                      label = "Cell types of Interest",
@@ -411,6 +382,14 @@ server <- function(input, output) {
       )
     })
     
+    output$celltype_enri <- renderUI({
+      selectizeInput("celltype_enri",
+                     label = "Cell types of Interest",
+                     choices = cell_predicted(),
+                     multiple = T,
+                     options = list(placeholder = 'Select cell types')
+      )
+    })
     
     ######### promoter
       output$gene_pro <- renderUI({
@@ -418,7 +397,11 @@ server <- function(input, output) {
                        label = "Promoter of Interest",
                        choices = rownames(true_promoter),
                        multiple = F,
+                       if (input$gene %in% rownames(true_promoter)){
+                         selected = input$gene
+                       },
                        options = list(placeholder = 'Select promoters')
+             
         )
       })
       output$gene_pro2 <- renderUI({
@@ -426,6 +409,9 @@ server <- function(input, output) {
                        label = "Promoter of Interest",
                        choices = rownames(true_promoter),
                        multiple = T,
+                       if ( input$gene2%in%rownames(true_promoter)){
+                         selected = input$gene2
+                       },
                        options = list(maxItems = nrow(true_promoter),placeholder = 'Select promoters')
         )
       })
@@ -435,6 +421,7 @@ server <- function(input, output) {
                        label = "Cell types of Interest",
                        choices = cell_pro(),
                        multiple = T,
+                       selected = input$celltype,
                        options = list(placeholder = 'Select cell types')
         )
       })
@@ -448,6 +435,9 @@ server <- function(input, output) {
                        label = "Exon of Interest",
                        choices = rownames(true_exon),
                        multiple = F,
+                       if (input$gene %in% rownames(true_exon)){
+                         selected = input$gene
+                       },
                        options = list(placeholder = 'Select exons')
         )
       })
@@ -456,6 +446,9 @@ server <- function(input, output) {
                        label = "Exon of Interest",
                        choices = rownames(true_exon),
                        multiple = T,
+                       if (input$gene2 %in% rownames(true_exon)){
+                         selected = input$gene2
+                       },
                        options = list(maxItems = nrow(true_exon),placeholder = 'Select exons')
         )
       })
@@ -465,16 +458,21 @@ server <- function(input, output) {
                        label = "Cell types of Interest",
                        choices = cell_exon(),#change
                        multiple = T,
+                       selected = input$celltype,
                        options = list(placeholder = 'Select cell types')
+
         )
       })
-    # 
+
       #######Intron
       output$gene_intron <- renderUI({
         selectizeInput("gene_intron",
                        label = "Intron of Interest",
                        choices = rownames(true_intron),
                        multiple = F,
+                       if (input$gene %in% rownames(true_intron)){
+                         selected = input$gene
+                       },
                        options = list(placeholder = 'Select introns')
         )
       })
@@ -483,6 +481,9 @@ server <- function(input, output) {
                        label = "Intron of Interest",
                        choices = rownames(true_intron),
                        multiple = T,
+                       if (input$gene2 %in% rownames(true_intron)){
+                         selected = input$gene2
+                       },
                        options = list(maxItems = nrow(true_intron),placeholder = 'Select introns')
         )
       })
@@ -519,8 +520,8 @@ server <- function(input, output) {
                        label = "Cell types of Interest",
                        choices = cell_tf(),
                        multiple = T,
-                       options = list(placeholder = 'Select cell types')
-        )
+                       selected = input$celltype,
+                       options = list(placeholder = 'Select cell types'))
       })
 
       ##enhancer
@@ -529,6 +530,9 @@ server <- function(input, output) {
                        label = "Enhancer of Interest",
                        choices = rownames(true_enhancer),
                        multiple = F,
+                       if (input$gene %in% rownames(true_enhancer)){
+                         selected = input$gene
+                       },
                        options = list(placeholder = 'Select Enhancers')
         )
       })
@@ -538,6 +542,9 @@ server <- function(input, output) {
                        label = "Enhancer of Interest",
                        choices = rownames(true_enhancer),
                        multiple = T,
+                       if (input$gene2 %in% rownames(true_enhancer)){
+                         selected = input$gene2
+                       },
                        options = list(maxItems = nrow(true_enhancer),placeholder = 'Select Enhancers')
         )
       })
@@ -547,15 +554,11 @@ server <- function(input, output) {
                        label = "Cell types of Interest",
                        choices = cell_enhancer(),
                        multiple = T,
+                       selected = input$celltype,
                        options = list(placeholder = 'Select cell types')
         )
       })
       
-
-    
-    celltype=reactive({
-      input$celltype
-    })
     
     ## category 
     output$sel_assay <- renderUI({
@@ -948,7 +951,7 @@ server <- function(input, output) {
     })
     
     gene_curve = reactive({
-      match(gene2(),rownames(rna))
+      match(input$gene2,rownames(rna))
     })
     
     dat_predicted = reactive({
@@ -969,10 +972,7 @@ server <- function(input, output) {
     
     
     ####### true dnase data   
-    
-    
-    #################################
-    pos_new = reactive({
+      pos_new = reactive({
       c(1:ncol(DNase_new()))
     })
 
@@ -1024,8 +1024,8 @@ server <- function(input, output) {
     mc = reactive({
       cell_mc = cell_predicted() 
       data_mc = dat_predicted()
-      dd = data_mc[,which(cell_mc%in%celltype())]
-      colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype())]
+      dd = data_mc[,which(cell_mc%in%input$celltype)]
+      colnames(dd) = colnames(data_mc)[which(cell_mc%in%input$celltype)]
       set.seed(10)
       exprmclust(dd)
     })
@@ -1054,39 +1054,27 @@ server <- function(input, output) {
     })
     
     line = reactive({
-      line = t(sapply(1:length(gene2()),function(i) fitted(loess(time()[i,] ~ c(1:ncol(time()))))))
+      line = t(sapply(1:length(input$gene2),function(i) fitted(loess(time()[i,] ~ c(1:ncol(time()))))))
       melt(line)
     })
     # 
-    # output$impo <- renderPrint({
-    #   cell_predicted()[which(cell_predicted()%in%celltype())]
-    # })
-    # output$curve_text <- renderPrint({
-    #   cell_pro()[which(cell_pro()%in%celltype_pro())]
-    # })
-    # 
-    # output$exon_curve_text <- renderPrint({
-    #   cell_exon()[which(cell_exon()%in%celltype_pro())]
-    # })
-    # output$intron_curve_text <- renderPrint({
-    #  mc_pro()
-    # })
-    
-    output$curve =renderPlotly({
+
+
+    output$curve1 =renderPlotly({
       if (length(input$gene2) == 1){
         line1 = fitted(loess(time() ~ c(1:length(time()))))
         line = data.frame(cbind(Var1 = 1,Var2 = c(1:length(line1)) , value = line1))
         long= data.frame(cbind(Var1 = input$gene2,Var2 = names(time()) , gene = time()))
         rownames(long)=NULL
         long[,2]= line[,2]
-        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  'WASH7P',
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name= input$celltype,
                 marker = list(opacity=0.5,width = 2)) %>% 
           add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
-          ) %>%          
-          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%celltype())],
-                                                                     '</br> Gene: ', long$Var1,
-                                                                     '</br> Sample: ',long$Var2))%>%
-          layout(title = paste0( 'Gene expression curve of ',celltype()),
+          ) %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype)],
+                                                      '</br> Gene: ', long$Var1,
+                                                      '</br> Sample: ',long$Var2))%>%
+          layout(title = paste0( 'Promoter expression curve of ',celltype_pro()),
                  xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -1101,19 +1089,20 @@ server <- function(input, output) {
                    tickfont = list(
                      size = 14,
                      color = 'rgb(107, 107, 107)')))
+        
       }else{
         long=long()
         line=line()
         plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                color = ~ Var1,
+                color = ~Var1,showlegend = F,
                 marker = list(opacity=0.5,width = 2)) %>%
           add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                     color = ~long$Var1,
                     showlegend = F)  %>%
-          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%celltype())],
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype)],
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
-          layout(title = paste0( 'Gene expression curve of ',celltype()),
+          layout(title = paste0( 'Gene expression curve of ',input$celltype),
                  xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -1130,14 +1119,15 @@ server <- function(input, output) {
                      color = 'rgb(107, 107, 107)')))
       }
     })
+
     
     output$pca_gene <- renderPlot({
       if (!is.null(input$celltype)){
-      dd = dat_predicted()[,which(cell_predicted()%in%celltype())]
-      colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype())]
-      cell = cell_predicted()[which(cell_predicted()%in%celltype())]
+      dd = dat_predicted()[,which(cell_predicted()%in%input$celltype)]
+      colnames(dd) = colnames(data_mc)[which(cell_mc%in%input$celltype)]
+      cell = cell_predicted()[which(cell_predicted()%in%input$celltype)]
       pca = as.data.frame(prcomp(t(dd),scale=T)$x)
-      batch = (batch_var()[[which(batch_var()=='Predicted DNase')]])[which(cell_predicted()%in%celltype())]
+      batch = (batch_var()[[which(batch_var()=='Predicted DNase')]])[which(cell_predicted()%in%input$celltype)]
       plot_ly(pca, x = ~PC1, y = ~PC2,
               color = cell,colors='Set1',
               symbol= ~cell ,symbols = cell,  marker=list(size=10, opacity=0.7)) %>%
@@ -1149,7 +1139,7 @@ server <- function(input, output) {
  
     output$pca_curve <- renderPlot({
       if (!is.null(input$celltype)){
-        cell_time = cell_predicted()[which(cell_predicted()%in%celltype())]
+        cell_time = cell_predicted()[which(cell_predicted()%in%input$celltype)]
         mc=mc()
         cell_line=unique(cell_time)
         n.clust = c(1:max(unique(mc[[3]])))
@@ -1185,8 +1175,7 @@ server <- function(input, output) {
       }
       
     })
-    
-    output$heat =renderPlotly({
+    output$heat1 =renderPlotly({
       if (!is.null(tsne())){
         tsne=tsne()[which(batch_var()=='Predicted DNase'),]
         pos = pos()[pos() <= ncol(rna)]
@@ -1197,21 +1186,20 @@ server <- function(input, output) {
         s <- interp(x,y,z)
         d <- melt(s$z, na.rm = TRUE)
         names(d) <- c("x", "y", "z")
-        d$Tsne1 <- s$x[d$x]
-        d$Tsne2 <- s$y[d$y]
+        d$PC1 <- s$x[d$x]
+        d$PC2 <- s$y[d$y]
         mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-        g = ggplot(data = d, aes(x = Tsne1, y = Tsne2, fill = z,text = paste("Gene expression level:",z)))+
+        g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("Gene expression level:",z)))+
           geom_raster()+
           scale_fill_gradientn(colours = mycol,limits=range(z),'Gene expression level')+
           theme_classic()+
-          ggtitle(paste0('Gene expression Tsne heatmap of ',input$gene))
+          ggtitle(paste0('Gene expression TSNE heatmap of ',input$gene))
         ggplotly(g,tooltip = "text")
       }
     })
-    
-    output$heat_pca =renderPlotly({
+
+    output$heat_pca1 =renderPlotly({
       if (!is.null(pca())){
-        
         pca=pca()[which(batch_var()=='Predicted DNase'),]
         pos = pos()[pos() <= ncol(rna)]
         z = rna[pos_gene(),pos]
@@ -1232,6 +1220,7 @@ server <- function(input, output) {
         ggplotly(g,tooltip = "text")
       }
     })
+    
     ############promoter
       gene_pro2 = reactive({
         input$gene_pro2
@@ -1312,9 +1301,9 @@ server <- function(input, output) {
           long= data.frame(cbind(Var1 = input$gene_pro2,Var2 = names(time_pro()) , gene = time_pro()))
           rownames(long)=NULL
           long[,2]= line[,2]
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  'WASH7P',
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  celltype_pro(),showlegend = F,
                   marker = list(opacity=0.5,width = 2)) %>% 
-            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
+            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F
             ) %>%
             add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_pro()[which(cell_pro()%in%celltype_pro())],
                                                         '</br> Gene: ', long$Var1,
@@ -1327,7 +1316,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Gene expression',
+                     title = 'Promoter expression',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1339,7 +1328,7 @@ server <- function(input, output) {
           long=long_pro()
           line=line_pro()
           plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,
+                  color = ~Var1,showlegend = F,
                   marker = list(opacity=0.5,width = 2)) %>%
             add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                       color = ~long$Var1,
@@ -1355,7 +1344,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Gene expression',
+                     title = 'Promoter expression',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1536,7 +1525,7 @@ server <- function(input, output) {
           long= data.frame(cbind(Var1 = input$gene_exon2,Var2 = names(time_exon()) , gene = time_exon()))
           rownames(long)=NULL
           long[,2]= line[,2]
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  'WASH7P',
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
                   marker = list(opacity=0.5,width = 2)) %>% 
             add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
             ) %>%
@@ -1564,7 +1553,7 @@ server <- function(input, output) {
           long=long_exon()
           line=line_exon()
           plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,
+                  color = ~Var1,showlegend = F,
                   marker = list(opacity=0.5,width = 2)) %>%
             add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                       color = ~long$Var1,
@@ -1766,7 +1755,7 @@ server <- function(input, output) {
           long= data.frame(cbind(Var1 = input$gene_intron2,Var2 = names(time_intron()) , gene = time_intron()))
           rownames(long)=NULL
           long[,2]= line[,2]
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  'WASH7P',
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', 
                   marker = list(opacity=0.5,width = 2)) %>% 
             add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
             ) %>%
@@ -1794,7 +1783,7 @@ server <- function(input, output) {
           long=long_intron()
           line=line_intron()
           plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,
+                  color = ~Var1,showlegend = F,
                   marker = list(opacity=0.5,width = 2)) %>%
             add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                       color = ~long$Var1,
@@ -1994,7 +1983,7 @@ server <- function(input, output) {
           long= data.frame(cbind(Var1 = input$gene_enhancer2,Var2 = names(time_enhancer()) , gene = time_enhancer()))
           rownames(long)=NULL
           long[,2]= line[,2]
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  'WASH7P',
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
                   marker = list(opacity=0.5,width = 2)) %>% 
             add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
             )  %>%
@@ -2021,7 +2010,7 @@ server <- function(input, output) {
           long=long_enhancer()
           line=line_enhancer()
           plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,
+                  color = ~Var1,showlegend = F,
                   marker = list(opacity=0.5,width = 2)) %>%
             add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                       color = ~long$Var1,
@@ -2221,7 +2210,7 @@ server <- function(input, output) {
         long= data.frame(cbind(Var1 = input$gene_tf2,Var2 = names(time_tf()) , gene = time_tf()))
         rownames(long)=NULL
         long[,2]= line[,2]
-        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  'WASH7P',
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
                 marker = list(opacity=0.5,width = 2)) %>% 
           add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
           ) %>%
@@ -2247,7 +2236,7 @@ server <- function(input, output) {
       }else{
         long=long_tf()
         line=line_tf()
-        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',showlegend = F,
                 color = ~Var1,
                 marker = list(opacity=0.5,width = 2)) %>%
           add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
@@ -2368,279 +2357,373 @@ server <- function(input, output) {
       }
     })
     
-    dat_sel = reactive({
-      if (input$corr=='uncorrected'){
-        d = raw[,pos_sel()]
-        colnames(d) = colnames(raw)[pos_sel()]
-        d
-      }else if (input$corr=='comb'){
-        comb[,pos_sel()]
-      }else if (input$corr=='mnn'){
-        mnn[,pos_sel()]
-      }else{
-        iter[,pos_sel()]
+
+####################### enrichment 
+    pos_rna = reactive({
+      which(cell_predicted()%in%(input$celltype_enri))
+    })
+    cell_predicted_chose =  reactive({
+      cell_predicted()[pos_rna()]
+    })
+    rna_chose =  reactive({
+      rna[,pos_rna()]
+    })
+    
+    raw_rna_chose = reactive({
+      raw[,pos_rna()]
+    })
+    
+    ####################### find order (use predicted dnase to do peudo time )
+    rna_order = reactive({
+      cell_mc = cell_predicted_chose()
+      set.seed(10)
+      mc = exprmclust(raw_rna_chose())
+      order <- TSCANorder(mc,listbranch = F)
+      pos_order = match(order,colnames(rna_chose()))
+      rna_chose()[,pos_order]
+    })
+    
+    fit = reactive({
+      set.seed(1)
+      kmeans(rna_order(), 20)     
+    })
+    
+    clu = reactive({
+      fit()$cluster
+    })
+    
+    clu_mean =  reactive({
+      t(sapply(c(1:max(clu())), function(i) colMeans(rna_order()[which(clu()==i),])))
+    })
+    
+
+    line_enri = reactive({
+      line= t(sapply(c(1:nrow(clu_mean())),function(i) 
+                 fitted(loess(clu_mean()[i,] ~ c(1:ncol(clu_mean()))))))
+      melt(line)
+    })
+    
+    
+    long_enri = reactive({
+      melt(clu_mean(), value.name = "gene")
+    })
+    
+
+    output$rna_curve =renderPlotly({
+      if (length(input$celltype_enri) != 0){
+        long=long_enri()
+        line=line_enri()
+        long[,2] = line[,2]
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+                color = ~as.factor(Var1),showlegend = FALSE,
+                marker = list(opacity=0.5,width = 2))  %>%
+          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
+                    color = ~as.factor(long$Var1))  %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype_enri)],
+                                                      '</br> Cluster: ', long$Var1,
+                                                      '</br> Sample: ',long_enri()$Var2))%>%
+          layout(title = paste0( 'Clustered gene expression curve of ',input$celltype_enri),
+                 xaxis = list(
+                   title = "Pseudotime",
+                   showticklabels = FALSE,
+                   tickfont = list(
+                     size = 14,
+                     color = 'rgb(107, 107, 107)')),
+                 yaxis = list(
+                   title = 'Clustered gene expression',
+                   titlefont = list(
+                     size = 16,
+                     color = 'rgb(107, 107, 107)'),
+                   tickfont = list(
+                     size = 14,
+                     color = 'rgb(107, 107, 107)')))
       }
     })
     
-    dat = reactive({
-      dat_sel()[,keep()]
+######## find corresponding cluster 
+    ########## keep only same genes 
+    gene_pos = reactive({
+      na.omit(match(rownames(rna),rownames(true_promoter)))
+    })
+      
+    del_enri = reactive({
+      which(is.na(match(rownames(rna),rownames(true_promoter))))
     })
     
-   
-    
-    #for uncorrected data
-    dd_unc = reactive({
-      set.seed(10)
-      dat_ts = (raw[,pos_sel()])[,keep()]
-      rtsne=Rtsne(prcomp(t((dat_ts)),scale=T)$x[,1:50])$Y
-      rownames(rtsne)=colnames(dat_ts)
-      tsne=as.data.frame(rtsne)
-      colnames(tsne)=c('Tsne1','Tsne2')
-      as.matrix(dist(tsne)) #all.dists2_unc#
-    })
-    
-    sil_unc = reactive({
-      score_sil <- (cluster::silhouette(as.numeric(factor(cell_var())), dd_unc()))
-      score_sil[,3] 
-    })
-    
-    dd_mnn= reactive({
-      set.seed(10)
-      dat_ts = (mnn[,pos_sel()])[,keep()]
-      rtsne=Rtsne(prcomp(t((dat_ts)),scale=T)$x[,1:50])$Y
-      rownames(rtsne)=colnames(dat_ts)
-      tsne=as.data.frame(rtsne)
-      colnames(tsne)=c('Tsne1','Tsne2')
-       as.matrix(dist(tsne))
-    })
-    
-    sil_mnn = reactive({
-      score_sil <- (cluster::silhouette(as.numeric(factor(cell_var())), dd_mnn()))
-      score_sil[,3] 
-    })
-    
-    dd_comb= reactive({
-      set.seed(10)
-      dat_ts = (comb[,pos_sel()])[,keep()]
-      rtsne=Rtsne(prcomp(t((dat_ts)),scale=T)$x[,1:50])$Y
-      rownames(rtsne)=colnames(dat_ts)
-      tsne=as.data.frame(rtsne)
-      colnames(tsne)=c('Tsne1','Tsne2')
-      as.matrix(dist(tsne))
-    })
-    sil_comb = reactive({
-      score_sil <- (cluster::silhouette(as.numeric(factor(cell_var())), dd_comb()))
-      score_sil[,3] 
-    })
 
-    dd_iter= reactive({
-      set.seed(10)
-      dat_ts = (iter[,pos_sel()])[,keep()]
-      rtsne=Rtsne(prcomp(t((dat_ts)),scale=T)$x[,1:50])$Y
-      rownames(rtsne)=colnames(dat_ts)
-      tsne=as.data.frame(rtsne)
-      colnames(tsne)=c('Tsne1','Tsne2')
-      as.matrix(dist(tsne))
-    })
-    sil_iter = reactive({
-      score_sil <- (cluster::silhouette(as.numeric(factor(cell_var())), dd_iter()))
-      score_sil[,3] 
-    })
-
-
-    output$silhouette  <- renderPlot({
-      sils<-cbind(sil_unc(),sil_comb(),sil_mnn(),sil_iter())
-      boxplot(sils,main="Silhouette coefficient",names=c("Uncorrected","MNN",'iter','combat'),lwd=4,ylab="Silhouette coefficient")
+    
+    rna_data_gene = reactive({
+      rna[-del_enri(),]
     })
     
-    # ################## Batch mixing entropy on PCAs
-    # BatchEntropy <- function(dataset, batch0, L=100, M=100, k=500) {
-    #   require(RANN) 
-    #   nbatches<-length(unique(batch0))
-    #   entropy<-matrix(0,L,1)
-    #   set.seed(0) 
-    #   for (boot in 1:L) {
-    #     bootsamples<-sample(1:nrow(dataset),M)
-    #     W21<-nn2(dataset,query=dataset[bootsamples,],k)
-    #     for (i in 1:length(bootsamples)){
-    #       
-    #       for (j in 1:nbatches) {
-    #         xi<-max(1,sum(batch0[W21$nn.idx[i,]]==j))
-    #         entropy[boot]<-entropy[boot]+xi*log(xi)
-    #       }
-    #     }
-    #   }
-    #   return( (-1)*entropy/length(bootsamples) )
-    # }
-    # entropy_unc<-reactive({
-    #   dat_en = (raw[,pos_sel()])[,keep()]
-    #   pca_en=prcomp(t((dat_en)),scale=T)$x
-    #   pca_en = as.data.frame(pca_en)
-    #   BatchEntropy(pca_en[,1:2],batch_var())
+    clu_gene = reactive({
+      clu()[-del_enri()]
+    })
+    
+    pos_dnase = reactive({
+      which(cell_true()%in%input$celltype_enri)
+    })
+    
+     cell_promoter_chose = reactive({
+       cell_true()[pos_dnase()]
+     })
+     
+    promoter_chose_gene = reactive({
+      true_promoter[gene_pos(),pos_dnase()]
+    })
+    
+    promoter_chose_raw = reactive({
+      dat_true()[,pos_dnase()]
+    })
+    
+    ## construct peusdo time  
+    promoter_order = reactive({
+      set.seed(10)
+      promoter_mc = exprmclust(promoter_chose_raw())
+      order_d <- TSCANorder(promoter_mc,listbranch = F)
+      pos_order_d = match(order_d,colnames(promoter_chose_gene()))
+      promoter_chose_gene()[,pos_order_d]
+     })
+
+    clu_mean_promoter =  reactive({
+      t(sapply(c(1:max(clu_gene())), function(i) colMeans(promoter_order()[which(clu_gene()==i),])))
+    })
+    
+    
+    line_d1 = reactive({
+      line = t(sapply(c(1:20),function(i) 
+          fitted(loess(clu_mean_promoter()[i,] ~ c(1:ncol(clu_mean_promoter()))))))
+      melt(line)
+    })
+    
+    long_d1 = reactive({
+      melt(clu_mean_promoter(), value.name = "gene")
+    })
+    
+    # output$impo <- renderPrint({
+    #   head(long_d1())
     # })
     # 
-    # entropy_mnn<-reactive({
-    #   dat_en = (mnn[,pos_sel()])[,keep()]
-    #   pca_en=prcomp(t((dat_en)),scale=T)$x
-    #   pca_en = as.data.frame(pca_en)
-    #   BatchEntropy(pca_en[,1:2],batch_var())
+    # output$curve_text <- renderPrint({
+    #   head(line_d1())
     # })
     # 
-    # entropy_iter<-reactive({
-    #   dat_en = (iter[,pos_sel()])[,keep()]
-    #   pca_en=prcomp(t((dat_en)),scale=T)$x
-    #   pca_en = as.data.frame(pca_en)
-    #   BatchEntropy(pca_en[,1:2],batch_var())
+    # output$exon_curve_text <- renderPrint({
+    #   dim(dnase_order())
     # })
     # 
-    # entropy_comb<-reactive({
-    #   dat_en = (comb[,pos_sel()])[,keep()]
-    #   pca_en=prcomp(t((dat_en)),scale=T)$x
-    #   pca_en = as.data.frame(pca_en)
-    #   BatchEntropy(pca_en[,1:2],batch_var())
-    # })
+    # output$intron_curve_text <- renderPrint({
     #   
-    # output$entropies  <- renderPlot({
-    #   entropies<-cbind(entropy_unc(),entropy_comb(),entropy_mnn(),entropy_iter())
-    #   boxplot(entropies,main="",names=c("Uncorrected","MNN",'iter','combat'),lwd=4,ylab="Batch mixing entropy")#,col="Yellow",ylab="Alpha dists")
     # })
-    
-    
-    
-###################
-#### kbet 
-    kbet_unc <- reactive({
-      dat = (raw[,pos_sel()])[,keep()]
-      kBET(dat, batch_var(),plot=FALSE)
+    output$promoter_enri =renderPlotly({
+      if (length(input$celltype_enri) != 0){
+        long=long_d1()
+        line=line_d1()
+        long[,2]= line[,2]
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+                color = ~as.factor(Var1),showlegend = FALSE,
+                marker = list(opacity=0.5,width = 2))  %>%
+          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
+                    color = ~as.factor(long$Var1))  %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype_enri)],
+                                                      '</br> Cluster: ', long$Var1,
+                                                      '</br> Sample: ',long_d1()$Var2))%>%
+          layout(title = paste0( 'Clustered promoter expression curve of ',input$celltype_enri),
+                 xaxis = list(
+                   title = "Pseudotime",
+                   showticklabels = FALSE,
+                   tickfont = list(
+                     size = 14,
+                     color = 'rgb(107, 107, 107)')),
+                 yaxis = list(
+                   title = 'Clustered promoter expression',
+                   titlefont = list(
+                     size = 16,
+                     color = 'rgb(107, 107, 107)'),
+                   tickfont = list(
+                     size = 14,
+                     color = 'rgb(107, 107, 107)')))
+      }
     })
-    
-    output$k_unc  <- renderPlot({
-      kbet_unc = kbet_unc()
-    plot.data <- data.frame(class=rep(c('observed', 'expected'), 
-                                      each=length(kbet_unc$stats$kBET.observed)), 
-                            data =  c(kbet_unc$stats$kBET.observed,
-                                      kbet_unc$stats$kBET.expected))
-   ggplot(plot.data, aes(class, data)) + geom_boxplot() + 
-      labs(x='Test', y='Rejection rate',title='uncorrected kBET test results') +
-      theme_bw() +  
-      scale_y_continuous(limits=c(0,1))
-    })
-    kbet_mnn <- reactive({
-      dat = (mnn[,pos_sel()])[,keep()]
-      kBET(dat, batch_var(),plot=FALSE)
-    })
-    
-    output$k_mnn  <- renderPlot({
-      kbet_mnn = kbet_mnn()
-      plot.data <- data.frame(class=rep(c('observed', 'expected'), 
-                                        each=length(kbet_mnn$stats$kBET.observed)), 
-                              data =  c(kbet_mnn$stats$kBET.observed,
-                                        kbet_mnn$stats$kBET.expected))
-      ggplot(plot.data, aes(class, data)) + geom_boxplot() + 
-        labs(x='Test', y='Rejection rate',title='MNN kBET test results') +
-        theme_bw() +  
-        scale_y_continuous(limits=c(0,1))
-    })
-    
-    kbet_comb <- reactive({
-      dat = (comb[,pos_sel()])[,keep()]
-      kBET(dat, batch_var(),plot=FALSE)
-    })
-    
-    output$k_comb  <- renderPlot({
-      kbet_comb = kbet_comb()
-      plot.data <- data.frame(class=rep(c('observed', 'expected'), 
-                                        each=length(kbet_comb$stats$kBET.observed)), 
-                              data =  c(kbet_comb$stats$kBET.observed,
-                                        kbet_comb$stats$kBET.expected))
-      ggplot(plot.data, aes(class, data)) + geom_boxplot() + 
-        labs(x='Test', y='Rejection rate',title='Combat kBET test results') +
-        theme_bw() +  
-        scale_y_continuous(limits=c(0,1))
-    })
-    
-    kbet_iter <- reactive({
-      dat = (iter[,pos_sel()])[,keep()]
-      kBET(dat, batch_var(),plot=FALSE)
-    })
-    
-    output$k_iter  <- renderPlot({
-      kbet_iter = kbet_iter()
-      plot.data <- data.frame(class=rep(c('observed', 'expected'), 
-                                        each=length(kbet_iter$stats$kBET.observed)), 
-                              data =  c(kbet_iter$stats$kBET.observed,
-                                        kbet_iter$stats$kBET.expected))
-      ggplot(plot.data, aes(class, data)) + geom_boxplot() + 
-        labs(x='Test', y='Rejection rate',title='iterated MNN kBET test results') +
-        theme_bw() +  
-        scale_y_continuous(limits=c(0,1))
-    })
-    ## neighbor 
- #    min.n <- function(x,n){ 
- #      s <- sort(x, index.return=TRUE) 
- #      s$ix[c(1:n)]
- #    }
- #    
- #    closedist_unc=reactive({
- #      dd_unc = dd_unc()
- #      diag(dd_unc)=10000
- #      min_unc = lapply(c(1:nrow(dd_unc)), function(i) FUN=min.n(dd_unc[,i],10))
- #      close_unc=data.frame(lapply(c(1:nrow(dd_unc)), function(i) ifelse(cell_k[min_unc[[i]]]==cell_var[i],10,-1)))
- #      ave_unc=colMeans(close_unc)
- #      colMeans(data.frame(lapply(c(1:nrow(dd_unc)), function(i) close_unc[,i]/dd_unc[min_unc[[i]],i])))
- #    })
- #    
- #    closedist_mnn= reactive({
- #      dd_mnn = dd_mnn()
- #      diag(dd_mnn)=10000
- #      min_mnn = lapply(c(1:nrow(dd_mnn)), function(i) FUN=min.n(dd_mnn[,i],10))
- #      close_mnn=data.frame(lapply(c(1:nrow(dd_mnn)), function(i) ifelse(cell_k[min_mnn[[i]]]==cell_var[i],10,-1)))
- #      ave_mnn=colMeans(close_mnn)
- #      colMeans(data.frame(lapply(c(1:nrow(dd_mnn)), function(i) close_mnn[,i]/dd_mnn[min_mnn[[i]],i])))
- #    })
- #    
- #    closedist_iter=reactive({
- #      dd_iter = dd_iter()
- #      diag(dd_iter)=10000
- #      min_iter = lapply(c(1:nrow(dd_iter)), function(i) FUN=min.n(dd_iter[,i],10))
- #      close_iter=data.frame(lapply(c(1:nrow(dd_iter)), function(i) ifelse(cell_k[min_iter[[i]]]==cell_var[i],10,-1)))
- #      ave_iter=colMeans(close_iter)
- #      colMeans(data.frame(lapply(c(1:nrow(dd_iter)), function(i) close_iter[,i]/dd_iter[min_iter[[i]],i])))
- #    })
- #    
- #    closedist_comb=reactive({
- #      dd_comb = dd_comb()
- #      diag(dd_comb)=10000
- #      min_comb = lapply(c(1:nrow(dd_comb)), function(i) FUN=min.n(dd_comb[,i],10))
- #      close_comb=data.frame(lapply(c(1:nrow(dd_comb)), function(i) ifelse(cell_k[min_comb[[i]]]==cell_var[i],10,-1)))
- #      ave_comb=colMeans(close_comb)
- #      colMeans(data.frame(lapply(c(1:nrow(dd_comb)), function(i) close_comb[,i]/dd_comb[min_comb[[i]],i])))
- #    })
- # 
- # output$dist = renderPlot({
- #    ave_dist<-cbind(closedist_unc(),closedist_comb(),closedist_mnn(),closedist_iter())
- #    boxplot(ave_dist,main="",names=c("Uncorrected",'Combat',"MNN",'iter'),lwd=4,ylim=c(-5,5),
- #            ylab="10 nearest neighbor distance (10,-1),k=15",
- #            xlab = paste0('Mean: unc =',round(mean(closedist_unc()),4), 
- #                          ' combat =',round(mean(closedist_comb()),4), 
- #                          ' mnn=',round(mean(closedist_mnn()),4), 
- #                          ' iter=',round(mean(closedist_iter()),4)
- #            ))
- # })
  
- #
-    # output$compare  <- renderPlot({
-    #   closedist_unc = ave_dist[,1]
-    #   closedist_mnn = ave_dist[,2]
-    #   closedist_iter = ave_dist[,3]
-    #   boxplot(ave_dist,main="",names=c("Uncorrected","MNN",'iter'),lwd=4,ylim=c(-10,10),ylab="10 nearest neighbor distance (1,-1),k=15",
-    #           xlab = paste0('Mean: unc =',round(mean(closedist_unc),4),
-    #                         ' mnn=',round(mean(closedist_mnn),4),
-    #                         ' iter=',round(mean(closedist_iter),4)
-    #           ))
-    # })
-    #
+    ########## choose cluster 
+    ########### do GO 
+    output$go <- renderPrint({
+      genelist = ifelse(clu()==input$clus,1,0)
+      names(genelist) = names(clu())
+      GOdata <- new("topGOdata", ontology = "BP", allGenes = genelist, geneSel = function(p) p < 
+              0.01, description = "Test", annot = annFUN.org, mapping = "org.Mm.eg.db", 
+            ID = "Symbol")
+      resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+      GenTable(GOdata, classicFisher = resultFisher)
+    })
+    
+    ######## find corresponding cluster exon
+    ########## keep only same genes 
+    gene_pos_exon = reactive({
+      na.omit(match(rownames(rna),rownames(true_exon)))
+    })
+    
+    del_enri_exon = reactive({
+      which(is.na(match(rownames(rna),rownames(true_exon))))
+    })
+    
+    rna_exon_gene = reactive({
+      rna[-del_enri_exon(),]
+    })
+    
+    clu_gene_exon = reactive({
+      clu()[-del_enri_exon()]
+    })
+    
 
+    exon_chose_gene= reactive({
+      true_exon[gene_pos_exon(),pos_dnase()]
+    })
+    
+    exon_chose_raw = reactive({
+      dat_true()[,pos_dnase()]
+    })
+    
+    ## construct peusdo time  
+    exon_order = reactive({
+      set.seed(10)
+      exon_mc = exprmclust(exon_chose_raw())
+      order_d <- TSCANorder(exon_mc,listbranch = F)
+      pos_order_d = match(order_d,colnames(exon_chose_gene()))
+      exon_chose_gene()[,pos_order_d]
+    })
+    
+    clu_mean_exon =  reactive({
+      t(sapply(c(1:max(clu_gene_exon())), function(i) colMeans(exon_order()[which(clu_gene_exon()==i),])))
+    })
+    
+    
+    line_exon_clu = reactive({
+      line = t(sapply(c(1:20),function(i) 
+        fitted(loess(clu_mean_exon()[i,] ~ c(1:ncol(clu_mean_exon()))))))
+      melt(line)
+    })
+    
+    long_exon_clu = reactive({
+      melt(clu_mean_exon(), value.name = "gene")
+    })
+    
+
+    output$exon_enri =renderPlotly({
+      if (length(input$celltype_enri) != 0){
+        long=long_exon_clu()
+        line=line_exon_clu()
+        long[,2]= line[,2]
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+                color = ~as.factor(Var1),showlegend = FALSE,
+                marker = list(opacity=0.5,width = 2))  %>%
+          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
+                    color = ~as.factor(long$Var1))  %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype_enri)],
+                                                      '</br> Cluster: ', long$Var1,
+                                                      '</br> Sample: ',long_exon_clu()$Var2))%>%
+          layout(title = paste0( 'Clustered exon expression curve of ',input$celltype_enri),
+                 xaxis = list(
+                   title = "Pseudotime",
+                   showticklabels = FALSE,
+                   tickfont = list(
+                     size = 14,
+                     color = 'rgb(107, 107, 107)')),
+                 yaxis = list(
+                   title = 'Clustered exon expression',
+                   titlefont = list(
+                     size = 16,
+                     color = 'rgb(107, 107, 107)'),
+                   tickfont = list(
+                     size = 14,
+                     color = 'rgb(107, 107, 107)')))
+      }
+    })    
+    
+    
+    ######## find corresponding cluster exon
+    ########## keep only same genes 
+    gene_pos_intron = reactive({
+      na.omit(match(rownames(rna),rownames(true_intron)))
+    })
+    
+    del_enri_intron = reactive({
+      which(is.na(match(rownames(rna),rownames(true_intron))))
+    })
+    
+    rna_intron_gene = reactive({
+      rna[-del_enri_intron(),]
+    })
+    
+    clu_gene_intron = reactive({
+      clu()[-del_enri_intron()]
+    })
+
+    intron_chose_gene= reactive({
+      true_intron[gene_pos_intron(),pos_dnase()]
+    })
+    
+    intron_chose_raw = reactive({
+      dat_true()[,pos_dnase()]
+    })
+    
+    ## construct peusdo time  
+    intron_order = reactive({
+      set.seed(10)
+      intron_mc = exprmclust(intron_chose_raw())
+      order_d <- TSCANorder(intron_mc,listbranch = F)
+      pos_order_d = match(order_d,colnames(intron_chose_gene()))
+      intron_chose_gene()[,pos_order_d]
+    })
+    
+    clu_mean_intron =  reactive({
+      t(sapply(c(1:max(clu_gene_intron())), function(i) colMeans(intron_order()[which(clu_gene_intron()==i),])))
+    })
+    
+    
+    line_intron_clu = reactive({
+      line = t(sapply(c(1:20),function(i) 
+        fitted(loess(clu_mean_intron()[i,] ~ c(1:ncol(clu_mean_intron()))))))
+      melt(line)
+    })
+    
+    long_intron_clu = reactive({
+      melt(clu_mean_intron(), value.name = "gene")
+    })
+
+    output$intron_enri =renderPlotly({
+      if (length(input$celltype_enri) != 0){
+        long=long_intron_clu()
+        line=line_intron_clu()
+        long[,2]= line[,2]
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+                color = ~as.factor(Var1),showlegend = FALSE,
+                marker = list(opacity=0.5,width = 2))  %>%
+          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
+                    color = ~as.factor(long$Var1))  %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype_enri)],
+                                                      '</br> Cluster: ', long$Var1,
+                                                      '</br> Sample: ',long_intron_clu()$Var2))%>%
+          layout(title = paste0( 'Clustered intron expression curve of ',input$celltype_enri),
+                 xaxis = list(
+                   title = "Pseudotime",
+                   showticklabels = FALSE,
+                   tickfont = list(
+                     size = 14,
+                     color = 'rgb(107, 107, 107)')),
+                 yaxis = list(
+                   title = 'Clustered intron expression',
+                   titlefont = list(
+                     size = 16,
+                     color = 'rgb(107, 107, 107)'),
+                   tickfont = list(
+                     size = 14,
+                     color = 'rgb(107, 107, 107)')))
+      }
+    })    
+    
+    
 }
 
 shinyApp(ui = ui, server = server)
