@@ -219,7 +219,8 @@ ui <-  shinyUI(navbarPage("APP",
                                     selectizeInput("clus",
                                                  label = "Cluster of interest",
                                                  choices = c(1:20),
-                                                 multiple = F)
+                                                 multiple = F),
+                                  uiOutput('gene_clu')
                                 )
                               ),
                               # Show a plot of the generated distribution
@@ -266,7 +267,10 @@ ui <-  shinyUI(navbarPage("APP",
                                            plotlyOutput('curve1')%>% withSpinner(),
                                            
                                            plotOutput('pca_curve')%>% withSpinner(),
-                                           
+                                           verbatimTextOutput("impo"),
+                                           verbatimTextOutput('curve_text'),
+                                           verbatimTextOutput('exon_curve_text'),
+                                           verbatimTextOutput('intron_curve_text'),
                                            h4('Promoter curve'),
                                            plotlyOutput('promoter_curve')%>% withSpinner(),
                                            plotOutput('promoter_pca_curve')%>% withSpinner(),
@@ -291,12 +295,10 @@ ui <-  shinyUI(navbarPage("APP",
                                   ),
                                   tabPanel("Enrichment", 
                                            h4('Clustered RNA gene expression curve'),
-                                           verbatimTextOutput("impo"),
                                            
-                                           verbatimTextOutput('curve_text'),
-                                           verbatimTextOutput('exon_curve_text'),
-                                           verbatimTextOutput('intron_curve_text'),
                                            plotlyOutput('rna_curve')%>% withSpinner(),
+                                           verbatimTextOutput('gene_cluster'),
+                                           
                                            h4('GO analysis of chosen cluster'),
                                            
                                            verbatimTextOutput("go"),
@@ -397,9 +399,7 @@ server <- function(input, output) {
                        label = "Promoter of Interest",
                        choices = rownames(true_promoter),
                        multiple = F,
-                       if (input$gene %in% rownames(true_promoter)){
-                         selected = input$gene
-                       },
+                       #selected = input$gene,
                        options = list(placeholder = 'Select promoters')
              
         )
@@ -409,9 +409,8 @@ server <- function(input, output) {
                        label = "Promoter of Interest",
                        choices = rownames(true_promoter),
                        multiple = T,
-                       if ( input$gene2%in%rownames(true_promoter)){
-                         selected = input$gene2
-                       },
+                    #selected = input$gene2,
+                       
                        options = list(maxItems = nrow(true_promoter),placeholder = 'Select promoters')
         )
       })
@@ -421,23 +420,28 @@ server <- function(input, output) {
                        label = "Cell types of Interest",
                        choices = cell_pro(),
                        multiple = T,
-                       selected = input$celltype,
+                    #selected = input$celltype,
                        options = list(placeholder = 'Select cell types')
         )
       })
+      output$gene_clu <- renderUI({
+        selectizeInput("gene_clu",
+                       label = "Gene of Interest",
+                       choices = rownames(rna),
+                       multiple = T,
+                       options = list(placeholder = 'Select genes')
 
+        )
+      })
 
     
-    # 
       #######exon
       output$gene_exon <- renderUI({
         selectizeInput("gene_exon",
                        label = "Exon of Interest",
                        choices = rownames(true_exon),
                        multiple = F,
-                       if (input$gene %in% rownames(true_exon)){
-                         selected = input$gene
-                       },
+                    #selected = input$gene,
                        options = list(placeholder = 'Select exons')
         )
       })
@@ -446,9 +450,8 @@ server <- function(input, output) {
                        label = "Exon of Interest",
                        choices = rownames(true_exon),
                        multiple = T,
-                       if (input$gene2 %in% rownames(true_exon)){
-                         selected = input$gene2
-                       },
+                      #selected = input$gene2,
+                       
                        options = list(maxItems = nrow(true_exon),placeholder = 'Select exons')
         )
       })
@@ -458,7 +461,7 @@ server <- function(input, output) {
                        label = "Cell types of Interest",
                        choices = cell_exon(),#change
                        multiple = T,
-                       selected = input$celltype,
+                       #selected = input$celltype,
                        options = list(placeholder = 'Select cell types')
 
         )
@@ -470,9 +473,7 @@ server <- function(input, output) {
                        label = "Intron of Interest",
                        choices = rownames(true_intron),
                        multiple = F,
-                       if (input$gene %in% rownames(true_intron)){
-                         selected = input$gene
-                       },
+                       #selected = input$gene,
                        options = list(placeholder = 'Select introns')
         )
       })
@@ -481,9 +482,8 @@ server <- function(input, output) {
                        label = "Intron of Interest",
                        choices = rownames(true_intron),
                        multiple = T,
-                       if (input$gene2 %in% rownames(true_intron)){
-                         selected = input$gene2
-                       },
+                       #selected = input$gene2,
+                       
                        options = list(maxItems = nrow(true_intron),placeholder = 'Select introns')
         )
       })
@@ -491,8 +491,9 @@ server <- function(input, output) {
       output$celltype_intron <- renderUI({
         selectizeInput("celltype_intron",
                        label = "Cell types of Interest",
-                       choices = cell_intron(),#change
+                       choices = cell_intron(),
                        multiple = T,
+                       #selected = input$celltype,
                        options = list(placeholder = 'Select cell types')
         )
       })
@@ -503,6 +504,7 @@ server <- function(input, output) {
                        label = "Transcription factor of Interest",
                        choices = rownames(true_tf),
                        multiple = F,
+                       #selected = input$gene,
                        options = list(placeholder = 'Select transcription factors')
         )
       })
@@ -512,6 +514,7 @@ server <- function(input, output) {
                        label = "Transcription factor of Interest",
                        choices = rownames(true_tf),
                        multiple = T,
+                       #selected = input$gene2,
                        options = list(maxItems = nrow(true_tf),placeholder = 'Select transcription factors')
         )
       })
@@ -520,7 +523,7 @@ server <- function(input, output) {
                        label = "Cell types of Interest",
                        choices = cell_tf(),
                        multiple = T,
-                       selected = input$celltype,
+                       #selected = input$celltype,
                        options = list(placeholder = 'Select cell types'))
       })
 
@@ -530,9 +533,8 @@ server <- function(input, output) {
                        label = "Enhancer of Interest",
                        choices = rownames(true_enhancer),
                        multiple = F,
-                       if (input$gene %in% rownames(true_enhancer)){
-                         selected = input$gene
-                       },
+                       #selected = input$gene,
+                       
                        options = list(placeholder = 'Select Enhancers')
         )
       })
@@ -542,9 +544,7 @@ server <- function(input, output) {
                        label = "Enhancer of Interest",
                        choices = rownames(true_enhancer),
                        multiple = T,
-                       if (input$gene2 %in% rownames(true_enhancer)){
-                         selected = input$gene2
-                       },
+                       #selected = input$gene2,
                        options = list(maxItems = nrow(true_enhancer),placeholder = 'Select Enhancers')
         )
       })
@@ -554,7 +554,7 @@ server <- function(input, output) {
                        label = "Cell types of Interest",
                        choices = cell_enhancer(),
                        multiple = T,
-                       selected = input$celltype,
+                       #selected = input$celltype,
                        options = list(placeholder = 'Select cell types')
         )
       })
@@ -1074,7 +1074,7 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype)],
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
-          layout(title = paste0( 'Promoter expression curve of ',celltype_pro()),
+          layout(title = paste0( 'Promoter expression curve of ',input$celltype_pro),
                  xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -1094,11 +1094,10 @@ server <- function(input, output) {
         long=long()
         line=line()
         plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                color = ~Var1,showlegend = F,
+                color = ~Var1, 
                 marker = list(opacity=0.5,width = 2)) %>%
-          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
-                    color = ~long$Var1,
-                    showlegend = F)  %>%
+          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
+                    color = ~long$Var1)  %>%
           add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype)],
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
@@ -1179,62 +1178,37 @@ server <- function(input, output) {
       if (!is.null(tsne())){
         tsne=tsne()[which(batch_var()=='Predicted DNase'),]
         pos = pos()[pos() <= ncol(rna)]
-        z = rna[pos_gene(),pos]
-        cell = cell_var()[which(batch_var()=='Predicted DNase')]
-        x = tsne$Tsne1
-        y =tsne$Tsne2
-        s <- interp(x,y,z)
-        d <- melt(s$z, na.rm = TRUE)
-        names(d) <- c("x", "y", "z")
-        d$PC1 <- s$x[d$x]
-        d$PC2 <- s$y[d$y]
-        mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-        g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("Gene expression level:",z)))+
-          geom_raster()+
-          scale_fill_gradientn(colours = mycol,limits=range(z),'Gene expression level')+
-          theme_classic()+
-          ggtitle(paste0('Gene expression TSNE heatmap of ',input$gene))
-        ggplotly(g,tooltip = "text")
+        RNAseq = rna[pos_gene(),pos]
+        plot_ly(tsne, x = ~tsne$Tsne1, y = ~tsne$Tsne2, 
+                color = ~RNAseq,size=~RNAseq) %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()[which(batch_var()=='Predicted DNase')]),
+                                                      '</br> Cell: ', cell_predicted(),
+                                                      '</br> Batch: ', batch_var()[which(batch_var()=='Predicted DNase')])) %>%
+          layout(title = paste0('Gene expression Tsne heatmap of ',input$gene))
       }
     })
 
     output$heat_pca1 =renderPlotly({
       if (!is.null(pca())){
-        pca=pca()[which(batch_var()=='Predicted DNase'),]
+        pca = pca()[which(batch_var()=='Predicted DNase'),]
         pos = pos()[pos() <= ncol(rna)]
-        z = rna[pos_gene(),pos]
-        cell = cell_var()[which(batch_var()=='Predicted DNase')]
-        x = pca$PC1
-        y =pca$PC2
-        s <- interp(x,y,z)
-        d <- melt(s$z, na.rm = TRUE)
-        names(d) <- c("x", "y", "z")
-        d$PC1 <- s$x[d$x]
-        d$PC2 <- s$y[d$y]
-        mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-        g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("Gene expression level:",z)))+
-          geom_raster()+
-          scale_fill_gradientn(colours = mycol,limits=range(z),'Gene expression level')+
-          theme_classic()+
-          ggtitle(paste0('Gene expression PCA heatmap of ',input$gene))
-        ggplotly(g,tooltip = "text")
+        RNAseq = rna[pos_gene(),pos]
+        plot_ly(pca, x = ~pca$PC1, y = ~pca$PC2, 
+                color = ~RNAseq,size=~RNAseq) %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()[which(batch_var()=='Predicted DNase')]),
+                                                      '</br> Cell: ', cell_predicted(),
+                                                      '</br> Batch: ', batch_var()[which(batch_var()=='Predicted DNase')])) %>%
+          layout(title = paste0('Gene expression PCA heatmap of ',input$gene))
       }
     })
     
     ############promoter
-      gene_pro2 = reactive({
-        input$gene_pro2
-      })
-      celltype_pro = reactive({
-        input$celltype_pro
-      })
-
       pos_gene_pro <- reactive ({
         match(input$gene_pro,rownames(true_promoter))
       })
 
       gene_curve_pro = reactive({
-        match(gene_pro2(),rownames(true_promoter))
+        match(input$gene_pro2,rownames(true_promoter))
       })
 
     cell_pro = reactive({
@@ -1258,8 +1232,8 @@ server <- function(input, output) {
           data_mc = cbind(dat_predicted()[,-rep_pro()],dat_true())
         }
         cell_mc = cell_pro()
-        dd = data_mc[,which(cell_mc%in%celltype_pro())]
-        colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_pro())]
+        dd = data_mc[,which(cell_mc%in%input$celltype_pro)]
+        colnames(dd) = colnames(data_mc)[which(cell_mc%in%input$celltype_pro)]
         set.seed(10)
         exprmclust(dd)
       })
@@ -1286,14 +1260,22 @@ server <- function(input, output) {
           long
         })
 
-
       line_pro = reactive({
-        line = t(sapply(1:length(gene_pro2()),function(i) fitted(loess(time_pro()[i,] ~ c(1:ncol(time_pro()))))))
-        #  rownames(line) = colnames(time())
+        line = t(sapply(1:length(input$gene_pro2),function(i) fitted(loess(time_pro()[i,] ~ c(1:ncol(time_pro()))))))
         melt(line)
       })
-
-
+# output$impo = renderPrint({
+#   head(long_pro())
+# })
+# output$curve_text = renderPrint({
+#   head(line_pro())
+# })
+# output$exon_curve_text = renderPrint({
+#   dim(time_pro())
+# })
+# output$intron_curve_text = renderPrint({
+#   order_pro()
+# })
       output$promoter_curve =renderPlotly({
         if (length(input$gene_pro2) == 1){
           line1 = fitted(loess(time_pro() ~ c(1:length(time_pro()))))
@@ -1301,14 +1283,13 @@ server <- function(input, output) {
           long= data.frame(cbind(Var1 = input$gene_pro2,Var2 = names(time_pro()) , gene = time_pro()))
           rownames(long)=NULL
           long[,2]= line[,2]
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', name=  celltype_pro(),showlegend = F,
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', 
                   marker = list(opacity=0.5,width = 2)) %>% 
-            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F
-            ) %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_pro()[which(cell_pro()%in%celltype_pro())],
+            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_pro()[which(cell_pro()%in%input$celltype_pro)],
                                                         '</br> Gene: ', long$Var1,
                                                         '</br> Sample: ',long$Var2))%>%
-            layout(title = paste0( 'Promoter expression curve of ',celltype_pro()),
+            layout(title = paste0( 'Promoter expression curve of ',input$celltype_pro),
                    xaxis = list(
                      title = "Pseudotime",
                      showticklabels = FALSE,
@@ -1328,15 +1309,14 @@ server <- function(input, output) {
           long=long_pro()
           line=line_pro()
           plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,showlegend = F,
+                  color = ~Var1,
                   marker = list(opacity=0.5,width = 2)) %>%
-            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
-                      color = ~long$Var1,
-                      showlegend = F)  %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_pro()[which(cell_pro()%in%celltype_pro())],
+            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
+                      color = ~long$Var1)  %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_pro()[which(cell_pro()%in%input$celltype_pro)],
                                                         '</br> Gene: ', long$Var1,
                                                         '</br> Sample: ',long$Var2))%>%
-            layout(title = paste0( 'Promoter expression curve of ',celltype_pro()),
+            layout(title = paste0( 'Promoter expression curve of ',input$celltype_pro),
                    xaxis = list(
                      title = "Pseudotime",
                      showticklabels = FALSE,
@@ -1356,7 +1336,7 @@ server <- function(input, output) {
 
       output$promoter_pca_curve <- renderPlot({
         if (!is.null(input$celltype_pro)){
-          cell_time = cell_pro()[which(cell_pro()%in%celltype_pro())]
+          cell_time = cell_pro()[which(cell_pro()%in%input$celltype_pro)]
           mc=mc_pro()
           cell_line=unique(cell_time)
           n.clust = c(1:max(unique(mc[[3]])))
@@ -1399,52 +1379,27 @@ server <- function(input, output) {
 
       output$heat_promoter =renderPlotly({
         if (!is.null(tsne())){
-          tsne=tsne()
-          z = cbind(pro_pred_dat(),pro_true_dat())[pos_gene_pro(),]
-          cell = cell_var()
-          x = tsne$Tsne1
-          y = tsne$Tsne2
-          s <- interp(x,y,z)
-          d <- melt(s$z, na.rm = TRUE)
-          names(d) <- c("x", "y", "z")
-          d$Tsne1 <- s$x[d$x]
-          d$Tsne2 <- s$y[d$y]
-          mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-          g = ggplot(data = d, aes(x = Tsne1, y = Tsne2, fill = z,text = paste("Promoter level:",z)))+
-            geom_raster()+
-            scale_fill_gradientn(colours = mycol,limits=range(z),'Promoter level')+
-            theme_classic()+
-            ggtitle(paste0('Promoter Tsne heatmap of ',input$gene_pro))
-          ggplotly(g,tooltip = "text")
+          promoter = cbind(pro_pred_dat(),pro_true_dat())[pos_gene_pro(),]
+          plot_ly(tsne(), x = ~Tsne1, y = ~Tsne2,
+                  color = ~promoter,size=~promoter) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var())) %>%
+          layout(title = paste0('Promoter TSNE heatmap of ',input$gene_pro))
         }
       })
 
       output$heat_promoter_pca =renderPlotly({
         if (!is.null(pca())){
-          pca=pca()
-          z =cbind(pro_pred_dat(),pro_true_dat())[pos_gene_pro(),]
-          cell = cell_var()
-          x = pca$PC1
-          y =pca$PC2
-          s <- interp(x,y,z)
-          d <- melt(s$z, na.rm = TRUE)
-          names(d) <- c("x", "y", "z")
-          d$PC1 <- s$x[d$x]
-          d$PC2 <- s$y[d$y]
-          mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-          g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("Promoter level:",z)))+
-            geom_raster()+
-            scale_fill_gradientn(colours = mycol,limits=range(z),'Promoter level')+
-            theme_classic()+
-            ggtitle(paste0('Promoter PCA heatmap of ',input$gene_pro))
-          ggplotly(g,tooltip = "text")
+          promoter = cbind(pro_pred_dat(),pro_true_dat())[pos_gene_pro(),]
+          plot_ly(pca(), x = ~PC1, y = ~PC2,
+                  color = ~promoter,size=~promoter) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var())) %>%
+            layout(title = paste0('Promoter PCA heatmap of ',input$gene_pro))
         }
       })
-
-
-
-
-
 
       ###########exon
       gene_exon2 = reactive({
@@ -1459,7 +1414,7 @@ server <- function(input, output) {
       })
 
       gene_curve_exon = reactive({
-        match(gene_exon2(),rownames(true_exon))
+        match(input$gene_exon2,rownames(true_exon))
       })
 
       cell_exon = reactive({
@@ -1482,8 +1437,8 @@ server <- function(input, output) {
           data_mc = cbind(dat_predicted()[,-rep_exon()],dat_true())
         }
         cell_mc = cell_exon()
-        dd = data_mc[,which(cell_mc%in%celltype_exon())]
-        colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_exon())]
+        dd = data_mc[,which(cell_mc%in%input$celltype_exon)]
+        colnames(dd) = colnames(data_mc)[which(cell_mc%in%input$celltype_exon)]
         set.seed(10)
         exprmclust(dd)
       })
@@ -1512,7 +1467,7 @@ server <- function(input, output) {
 
 
       line_exon = reactive({
-        line = t(sapply(1:length(gene_exon2()),function(i) fitted(loess(time_exon()[i,] ~ c(1:ncol(time_exon()))))))
+        line = t(sapply(1:length(input$gene_exon2),function(i) fitted(loess(time_exon()[i,] ~ c(1:ncol(time_exon()))))))
         #  rownames(line) = colnames(time())
         melt(line)
       })
@@ -1525,15 +1480,15 @@ server <- function(input, output) {
           long= data.frame(cbind(Var1 = input$gene_exon2,Var2 = names(time_exon()) , gene = time_exon()))
           rownames(long)=NULL
           long[,2]= line[,2]
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', 
                   marker = list(opacity=0.5,width = 2)) %>% 
-            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
+            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'  , showlegend = F 
             ) %>%
             
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_exon()[which(cell_exon()%in%celltype_exon())],
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_exon()[which(cell_exon()%in%input$celltype_exon)],
                                                         '</br> Gene: ', long$Var1,
                                                         '</br> Sample: ',long$Var2))%>%
-            layout(title = paste0( 'Exon expression curve of ',celltype_exon()),
+            layout(title = paste0( 'Exon expression curve of ',input$celltype_exon),
                    xaxis = list(
                      title = "Pseudotime",
                      showticklabels = FALSE,
@@ -1552,16 +1507,15 @@ server <- function(input, output) {
         }else{
           long=long_exon()
           line=line_exon()
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,showlegend = F,
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', 
+                  color = ~Var1,
                   marker = list(opacity=0.5,width = 2)) %>%
-            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
-                      color = ~long$Var1,
-                      showlegend = F)  %>%         
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_exon()[which(cell_exon()%in%celltype_exon())],
+            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',   showlegend = F,
+                      color = ~long$Var1 )  %>%         
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_exon()[which(cell_exon()%in%input$celltype_exon)],
                                                                                                   '</br> Gene: ', long$Var1,
                                                                                                   '</br> Sample: ',long$Var2))%>%
-            layout(title = paste0( 'Exon expression curve of ',celltype_exon()),
+            layout(title = paste0( 'Exon expression curve of ',input$celltype_exon),
                    xaxis = list(
                      title = "Pseudotime",
                      showticklabels = FALSE,
@@ -1581,7 +1535,7 @@ server <- function(input, output) {
 
       output$exon_pca_curve <- renderPlot({
         if (!is.null(input$celltype_exon)){
-          cell_time = cell_exon()[which(cell_exon()%in%celltype_exon())]
+          cell_time = cell_exon()[which(cell_exon()%in%input$celltype_exon)]
           mc=mc_exon()
           cell_line=unique(cell_time)
           n.clust = c(1:max(unique(mc[[3]])))
@@ -1631,64 +1585,40 @@ server <- function(input, output) {
 
       output$heat_exon =renderPlotly({
         if (!is.null(tsne())){
+          Exon = cbind(exon_pred_dat(),exon_true_dat())[pos_gene_exon(),]
           tsne=tsne()
-          z = cbind(exon_pred_dat(),exon_true_dat())[pos_gene_exon(),]
-          cell = cell_var()
-          x = tsne$Tsne1
-          y = tsne$Tsne2
-          s <- interp(x,y,z)
-          d <- melt(s$z, na.rm = TRUE)
-          names(d) <- c("x", "y", "z")
-          d$Tsne1 <- s$x[d$x]
-          d$Tsne2 <- s$y[d$y]
-          mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-          g = ggplot(data = d, aes(x = Tsne1, y = Tsne2, fill = z,text = paste("Exon level:",z)))+
-            geom_raster()+
-            scale_fill_gradientn(colours = mycol,limits=range(z),'Exon level')+
-            theme_classic()+
-            ggtitle(paste0('Exon Tsne heatmap of ',input$gene_exon))
-          ggplotly(g,tooltip = "text")
+          plot_ly(tsne, x = ~Tsne1, y = ~Tsne2,
+                  color = ~Exon,size=~Exon) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var())) %>%
+            layout(title = paste0('Exon Tsne heatmap of ',input$gene_exon))
         }
       })
 
       output$heat_exon_pca =renderPlotly({
         if (!is.null(pca())){
+          Exon = cbind(exon_pred_dat(),exon_true_dat())[pos_gene_exon(),]
           pca=pca()
-          z =cbind(exon_pred_dat(),exon_true_dat())[pos_gene_exon(),]
-          cell = cell_var()
-          x = pca$PC1
-          y =pca$PC2
-          s <- interp(x,y,z)
-          d <- melt(s$z, na.rm = TRUE)
-          names(d) <- c("x", "y", "z")
-          d$PC1 <- s$x[d$x]
-          d$PC2 <- s$y[d$y]
-          mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-          g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("Exon level:",z)))+
-            geom_raster()+
-            scale_fill_gradientn(colours = mycol,limits=range(z),'Exon level')+
-            theme_classic()+
-            ggtitle(paste0('Exon PCA heatmap of ',input$gene_exon))
-          ggplotly(g,tooltip = "text")
+          plot_ly(pca, x = ~PC1, y = ~PC2,
+                  color = ~Exon,size=~Exon) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var())) %>%
+            layout(title = paste0('Exon PCA heatmap of ',input$gene_exon))
         }
       })
 
 
       #################intron
       ###########intron
-      gene_intron2 = reactive({
-        input$gene_intron2
-      })
-      celltype_intron = reactive({
-        input$celltype_intron
-      })
 
       pos_gene_intron <- reactive ({
         match(input$gene_intron,rownames(true_intron))
       })
 
       gene_curve_intron = reactive({
-        match(gene_intron2(),rownames(true_intron))
+        match(input$gene_intron2,rownames(true_intron))
       })
 
       cell_intron = reactive({
@@ -1712,8 +1642,8 @@ server <- function(input, output) {
           data_mc = cbind(dat_predicted()[,-rep_intron()],dat_true())
         }
         cell_mc = cell_intron()
-        dd = data_mc[,which(cell_mc%in%celltype_intron())]
-        colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_intron())]
+        dd = data_mc[,which(cell_mc%in%input$celltype_intron)]
+        colnames(dd) = colnames(data_mc)[which(cell_mc%in%input$celltype_intron)]
         set.seed(10)
         exprmclust(dd)
       })
@@ -1742,7 +1672,7 @@ server <- function(input, output) {
 
 
       line_intron = reactive({
-        line = t(sapply(1:length(gene_intron2()),function(i) fitted(loess(time_intron()[i,] ~ c(1:ncol(time_intron()))))))
+        line = t(sapply(1:length(input$gene_intron2),function(i) fitted(loess(time_intron()[i,] ~ c(1:ncol(time_intron()))))))
         #  rownames(line) = colnames(time())
         melt(line)
       })
@@ -1755,15 +1685,15 @@ server <- function(input, output) {
           long= data.frame(cbind(Var1 = input$gene_intron2,Var2 = names(time_intron()) , gene = time_intron()))
           rownames(long)=NULL
           long[,2]= line[,2]
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', 
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',  
                   marker = list(opacity=0.5,width = 2)) %>% 
-            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
+            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers' , showlegend = F,
             ) %>%
             
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_intron()[which(cell_intron()%in%celltype_intron())],
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_intron()[which(cell_intron()%in%input$celltype_intron)],
                                                         '</br> Gene: ', long$Var1,
                                                         '</br> Sample: ',long$Var2))%>%
-            layout(title = paste0( 'Intron curve of ',celltype_intron()),
+            layout(title = paste0( 'Intron curve of ',input$celltype_intron),
                    xaxis = list(
                      title = "Pseudotime",
                      showticklabels = FALSE,
@@ -1782,16 +1712,15 @@ server <- function(input, output) {
         }else{
           long=long_intron()
           line=line_intron()
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,showlegend = F,
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', 
+                  color = ~Var1,
                   marker = list(opacity=0.5,width = 2)) %>%
-            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
-                      color = ~long$Var1,
-                      showlegend = F)  %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_intron()[which(cell_intron()%in%celltype_intron())],
+            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',   showlegend = F,
+                      color = ~long$Var1 )  %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_intron()[which(cell_intron()%in%input$celltype_intron)],
                                                         '</br> Gene: ', long$Var1,
                                                         '</br> Sample: ',long$Var2))%>%
-              layout(title = paste0( 'Intron expression curve of ',celltype_intron()),
+              layout(title = paste0( 'Intron expression curve of ',input$celltype_intron),
                    xaxis = list(
                      title = "Pseudotime",
                      showticklabels = FALSE,
@@ -1811,7 +1740,7 @@ server <- function(input, output) {
 
       output$intron_pca_curve <- renderPlot({
         if (!is.null(input$celltype_intron)){
-          cell_time = cell_intron()[which(cell_intron()%in%celltype_intron())]
+          cell_time = cell_intron()[which(cell_intron()%in%input$celltype_intron)]
           mc=mc_intron()
           cell_line=unique(cell_time)
           n.clust = c(1:max(unique(mc[[3]])))
@@ -1862,61 +1791,37 @@ server <- function(input, output) {
       output$heat_intron =renderPlotly({
         if (!is.null(tsne())){
           tsne=tsne()
-          z = cbind(intron_pred_dat(),intron_true_dat())[pos_gene_intron(),]
-          cell = cell_var()
-          x = tsne$Tsne1
-          y = tsne$Tsne2
-          s <- interp(x,y,z)
-          d <- melt(s$z, na.rm = TRUE)
-          names(d) <- c("x", "y", "z")
-          d$Tsne1 <- s$x[d$x]
-          d$Tsne2 <- s$y[d$y]
-          mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-          g = ggplot(data = d, aes(x = Tsne1, y = Tsne2, fill = z,text = paste("Intron level:",z)))+
-            geom_raster()+
-            scale_fill_gradientn(colours = mycol,limits=range(z),'Intron level')+
-            theme_classic()+
-            ggtitle(paste0('Intron Tsne heatmap of ',input$gene_intron))
-          ggplotly(g,tooltip = "text")
+          Intron = cbind(intron_pred_dat(),intron_true_dat())[pos_gene_intron(),]
+          plot_ly(tsne, x = ~Tsne1, y = ~Tsne2,
+                  color = ~Intron,size=~Intron) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var())) %>%
+            layout(title = paste0('Intron TSNE heatmap of ',input$gene_intron))
         }
       })
 
       output$heat_intron_pca =renderPlotly({
         if (!is.null(pca())){
           pca=pca()
-          z =cbind(intron_pred_dat(),intron_true_dat())[pos_gene_intron(),]
-          cell = cell_var()
-          x = pca$PC1
-          y =pca$PC2
-          s <- interp(x,y,z)
-          d <- melt(s$z, na.rm = TRUE)
-          names(d) <- c("x", "y", "z")
-          d$PC1 <- s$x[d$x]
-          d$PC2 <- s$y[d$y]
-          mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-          g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("Intron level:",z)))+
-            geom_raster()+
-            scale_fill_gradientn(colours = mycol,limits=range(z),'Intron level')+
-            theme_classic()+
-            ggtitle(paste0('Intron PCA heatmap of ',input$gene_intron))
-          ggplotly(g,tooltip = "text")
+          Intron = cbind(intron_pred_dat(),intron_true_dat())[pos_gene_intron(),]
+          plot_ly(pca, x = ~PC1, y = ~PC2,
+                  color = ~Intron,size=~Intron) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var())) %>%
+            layout(title = paste0('Intron PCA heatmap of ',input$gene_intron))
         }
       })
 
       ###########enhancer
-      gene_enhancer2 = reactive({
-        input$gene_enhancer2
-      })
-      celltype_enhancer = reactive({
-        input$celltype_enhancer
-      })
 
       pos_gene_enhancer <- reactive ({
         match(input$gene_enhancer,rownames(true_enhancer))
       })
 
       gene_curve_enhancer = reactive({
-        match(gene_enhancer2(),rownames(true_enhancer))
+        match(input$gene_enhancer2,rownames(true_enhancer))
       })
 
       cell_enhancer = reactive({
@@ -1940,8 +1845,8 @@ server <- function(input, output) {
           data_mc = cbind(dat_predicted()[,-rep_enhancer()],dat_true())
         }
         cell_mc = cell_enhancer()
-        dd = data_mc[,which(cell_mc%in%celltype_enhancer())]
-        colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_enhancer())]
+        dd = data_mc[,which(cell_mc%in%input$celltype_enhancer)]
+        colnames(dd) = colnames(data_mc)[which(cell_mc%in%input$celltype_enhancer)]
         set.seed(10)
         exprmclust(dd)
       })
@@ -1970,7 +1875,7 @@ server <- function(input, output) {
 
 
       line_enhancer = reactive({
-        line = t(sapply(1:length(gene_enhancer2()),function(i) fitted(loess(time_enhancer()[i,] ~ c(1:ncol(time_enhancer()))))))
+        line = t(sapply(1:length(input$gene_enhancer2),function(i) fitted(loess(time_enhancer()[i,] ~ c(1:ncol(time_enhancer()))))))
         #  rownames(line) = colnames(time())
         melt(line)
       })
@@ -1983,14 +1888,14 @@ server <- function(input, output) {
           long= data.frame(cbind(Var1 = input$gene_enhancer2,Var2 = names(time_enhancer()) , gene = time_enhancer()))
           rownames(long)=NULL
           long[,2]= line[,2]
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',showlegend = F,
                   marker = list(opacity=0.5,width = 2)) %>% 
             add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
             )  %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_enhancer()[which(cell_enhancer()%in%celltype_enhancer())],
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_enhancer()[which(cell_enhancer()%in%input$celltype_enhancer)],
                                                         '</br> Gene: ', long$Var1,
                                                         '</br> Sample: ',long$Var2))%>%
-            layout(title = paste0( 'Enhancer curve of ',celltype_enhancer()),
+            layout(title = paste0( 'Enhancer curve of ',input$celltype_enhancer),
                    xaxis = list(
                      title = "Pseudotime",
                      showticklabels = FALSE,
@@ -2010,15 +1915,15 @@ server <- function(input, output) {
           long=long_enhancer()
           line=line_enhancer()
           plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,showlegend = F,
+                  color = ~Var1,
+               
                   marker = list(opacity=0.5,width = 2)) %>%
-            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
-                      color = ~long$Var1,
-                      showlegend = F)  %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_enhancer()[which(cell_enhancer()%in%celltype_enhancer())],
+            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',   showlegend = F,
+                      color = ~long$Var1)  %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_enhancer()[which(cell_enhancer()%in%input$celltype_enhancer)],
                                                         '</br> Gene: ', long$Var1,
                                                         '</br> Sample: ',long$Var2))%>%
-            layout(title = paste0( 'Enhancer expression curve of ',celltype_enhancer()),
+            layout(title = paste0( 'Enhancer expression curve of ',input$celltype_enhancer),
                    xaxis = list(
                      title = "Pseudotime",
                      #showticklabels = FALSE,
@@ -2038,7 +1943,7 @@ server <- function(input, output) {
 
       output$enhancer_pca_curve <- renderPlot({
         if (!is.null(input$celltype_enhancer)){
-          cell_time = cell_enhancer()[which(cell_enhancer()%in%celltype_enhancer())]
+          cell_time = cell_enhancer()[which(cell_enhancer()%in%input$celltype_enhancer)]
           mc=mc_enhancer()
           cell_line=unique(cell_time)
           n.clust = c(1:max(unique(mc[[3]])))
@@ -2089,61 +1994,36 @@ server <- function(input, output) {
       output$heat_enhancer =renderPlotly({
         if (!is.null(tsne())){
           tsne=tsne()
-          z = cbind(enhancer_pred_dat(),enhancer_true_dat())[pos_gene_enhancer(),]
-          cell = cell_var()
-          x = tsne$Tsne1
-          y = tsne$Tsne2
-          s <- interp(x,y,z)
-          d <- melt(s$z, na.rm = TRUE)
-          names(d) <- c("x", "y", "z")
-          d$Tsne1 <- s$x[d$x]
-          d$Tsne2 <- s$y[d$y]
-          mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-          g = ggplot(data = d, aes(x = Tsne1, y = Tsne2, fill = z,text = paste("Enhancer level:",z)))+
-            geom_raster()+
-            scale_fill_gradientn(colours = mycol,limits=range(z),'Enhancer level')+
-            theme_classic()+
-            ggtitle(paste0('Enhancer Tsne heatmap of ',input$gene_enhancer))
-          ggplotly(g,tooltip = "text")
+          Enhancer = cbind(enhancer_pred_dat(),enhancer_true_dat())[pos_gene_enhancer(),]
+          plot_ly(tsne, x = ~Tsne1, y = ~Tsne2,
+                  color = ~Enhancer,size=~Enhancer) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var())) %>%
+            layout(title = paste0('Enhancer TSNE heatmap of ',input$gene_enhancer))
         }
       })
 
       output$heat_enhancer_pca =renderPlotly({
         if (!is.null(pca())){
           pca=pca()
-          z =cbind(enhancer_pred_dat(),enhancer_true_dat())[pos_gene_enhancer(),]
-          cell = cell_var()
-          x = pca$PC1
-          y =pca$PC2
-          s <- interp(x,y,z)
-          d <- melt(s$z, na.rm = TRUE)
-          names(d) <- c("x", "y", "z")
-          d$PC1 <- s$x[d$x]
-          d$PC2 <- s$y[d$y]
-          mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-          g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("enhancer level:",z)))+
-            geom_raster()+
-            scale_fill_gradientn(colours = mycol,limits=range(z),'enhancer level')+
-            theme_classic()+
-            ggtitle(paste0('enhancer PCA heatmap of ',input$gene_enhancer))
-          ggplotly(g,tooltip = "text")
+          Enhancer = cbind(enhancer_pred_dat(),enhancer_true_dat())[pos_gene_enhancer(),]
+          plot_ly(pca, x = ~PC1, y = ~PC2,
+                  color = ~Enhancer,size=~Enhancer) %>%
+            add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                        '</br> Cell: ', cell_var(),
+                                                        '</br> Batch: ', batch_var())) %>%
+            layout(title = paste0('Enhancer PCA heatmap of ',input$gene_enhancer))
         }
       })
 
     ###########Transcription factor
-    gene_tf2 = reactive({
-      input$gene_tf2
-    })
-    celltype_tf = reactive({
-      input$celltype_tf
-    })
-
     pos_gene_tf <- reactive ({
       match(input$gene_tf,rownames(true_tf))
     })
 
     gene_curve_tf = reactive({
-      match(gene_tf2(),rownames(true_tf))
+      match(input$gene_tf2,rownames(true_tf))
     })
 
     cell_tf = reactive({
@@ -2167,8 +2047,8 @@ server <- function(input, output) {
         data_mc = cbind(dat_predicted()[,-rep_tf()],dat_true())
       }
       cell_mc = cell_tf()
-      dd = data_mc[,which(cell_mc%in%celltype_tf())]
-      colnames(dd) = colnames(data_mc)[which(cell_mc%in%celltype_tf())]
+      dd = data_mc[,which(cell_mc%in%input$celltype_tf)]
+      colnames(dd) = colnames(data_mc)[which(cell_mc%in%input$celltype_tf)]
       set.seed(10)
       exprmclust(dd)
     })
@@ -2197,7 +2077,7 @@ server <- function(input, output) {
 
 
     line_tf = reactive({
-      line = t(sapply(1:length(gene_tf2()),function(i) fitted(loess(time_tf()[i,] ~ c(1:ncol(time_tf()))))))
+      line = t(sapply(1:length(input$gene_tf2),function(i) fitted(loess(time_tf()[i,] ~ c(1:ncol(time_tf()))))))
       #  rownames(line) = colnames(time())
       melt(line)
     })
@@ -2210,14 +2090,14 @@ server <- function(input, output) {
         long= data.frame(cbind(Var1 = input$gene_tf2,Var2 = names(time_tf()) , gene = time_tf()))
         rownames(long)=NULL
         long[,2]= line[,2]
-        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',showlegend = F,
                 marker = list(opacity=0.5,width = 2)) %>% 
           add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
           ) %>%
-          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_tf()[which(cell_tf()%in%celltype_tf())],
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_tf()[which(cell_tf()%in%input$celltype_tf)],
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
-          layout(title = paste0( 'Transcription factor curve of ',celltype_tf()),
+          layout(title = paste0( 'Transcription factor curve of ',input$celltype_tf),
                  xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -2236,16 +2116,16 @@ server <- function(input, output) {
       }else{
         long=long_tf()
         line=line_tf()
-        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',showlegend = F,
+        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
                 color = ~Var1,
                 marker = list(opacity=0.5,width = 2)) %>%
           add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
                     color = ~long$Var1,
                     showlegend = F)  %>%
-          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_tf()[which(cell_tf()%in%celltype_tf())],
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_tf()[which(cell_tf()%in%input$celltype_tf)],
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
-          layout(title = paste0( 'Transcription factor expression curve of ',celltype_tf()),
+          layout(title = paste0( 'Transcription factor expression curve of ',input$celltype_tf),
                  xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -2265,7 +2145,7 @@ server <- function(input, output) {
 
     output$tf_pca_curve <- renderPlot({
       if (!is.null(input$celltype_tf)){
-        cell_time = cell_tf()[which(cell_tf()%in%celltype_tf())]
+        cell_time = cell_tf()[which(cell_tf()%in%input$celltype_tf)]
         mc=mc_tf()
         cell_line=unique(cell_time)
         n.clust = c(1:max(unique(mc[[3]])))
@@ -2316,44 +2196,27 @@ server <- function(input, output) {
     output$heat_tf =renderPlotly({
       if (!is.null(tsne())){
         tsne=tsne()
-        z = cbind(tf_pred_dat(),tf_true_dat())[pos_gene_tf(),]
-        cell = cell_var()
-        x = tsne$Tsne1
-        y = tsne$Tsne2
-        s <- interp(x,y,z)
-        d <- melt(s$z, na.rm = TRUE)
-        names(d) <- c("x", "y", "z")
-        d$Tsne1 <- s$x[d$x]
-        d$Tsne2 <- s$y[d$y]
-        mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-        g = ggplot(data = d, aes(x = Tsne1, y = Tsne2, fill = z,text = paste("tf level:",z)))+
-          geom_raster()+
-          scale_fill_gradientn(colours = mycol,limits=range(z),'tf level')+
-          theme_classic()+
-          ggtitle(paste0('Transcription factor Tsne heatmap of ',input$gene_tf))
-        ggplotly(g,tooltip = "text")
+        TF = cbind(tf_pred_dat(),tf_true_dat())[pos_gene_tf(),]
+        plot_ly(tsne, x = ~Tsne1, y = ~Tsne2,
+                color = ~TF,size=~TF) %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                      '</br> Cell: ', cell_var(),
+                                                      '</br> Batch: ', batch_var())) %>%
+          layout(title = paste0('Transcription factor  TSNE heatmap of ',input$gene_tf))
+
       }
     })
 
     output$heat_tf_pca =renderPlotly({
       if (!is.null(pca())){
         pca=pca()
-        z =cbind(tf_pred_dat(),tf_true_dat())[pos_gene_tf(),]
-        cell = cell_var()
-        x = pca$PC1
-        y =pca$PC2
-        s <- interp(x,y,z)
-        d <- melt(s$z, na.rm = TRUE)
-        names(d) <- c("x", "y", "z")
-        d$PC1 <- s$x[d$x]
-        d$PC2 <- s$y[d$y]
-        mycol <- c("navy", "blue", "cyan", "lightcyan", "yellow", "red", "red4")
-        g = ggplot(data = d, aes(x = PC1, y = PC2, fill = z,text = paste("tf level:",z)))+
-          geom_raster()+
-          scale_fill_gradientn(colours = mycol,limits=range(z),'tf level')+
-          theme_classic()+
-          ggtitle(paste0('Transcription factor PCA heatmap of ',input$gene_tf))
-        ggplotly(g,tooltip = "text")
+        TF = cbind(tf_pred_dat(),tf_true_dat())[pos_gene_tf(),]
+        plot_ly(pca, x = ~PC1, y = ~PC2,
+                color = ~TF,size=~TF) %>%
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
+                                                      '</br> Cell: ', cell_var(),
+                                                      '</br> Batch: ', batch_var())) %>%
+          layout(title = paste0('Transcription factor  PCA heatmap of ',input$gene_tf))
       }
     })
     
@@ -2440,6 +2303,10 @@ server <- function(input, output) {
       }
     })
     
+    output$gene_cluster <- renderPrint({
+      paste('Gene' , input$gene_clu ,'is in cluster ', clu()[which(names(clu())==input$gene_clu)])
+    })
+    
 ######## find corresponding cluster 
     ########## keep only same genes 
     gene_pos = reactive({
@@ -2500,30 +2367,16 @@ server <- function(input, output) {
       melt(clu_mean_promoter(), value.name = "gene")
     })
     
-    # output$impo <- renderPrint({
-    #   head(long_d1())
-    # })
-    # 
-    # output$curve_text <- renderPrint({
-    #   head(line_d1())
-    # })
-    # 
-    # output$exon_curve_text <- renderPrint({
-    #   dim(dnase_order())
-    # })
-    # 
-    # output$intron_curve_text <- renderPrint({
-    #   
-    # })
+
     output$promoter_enri =renderPlotly({
       if (length(input$celltype_enri) != 0){
         long=long_d1()
         line=line_d1()
         long[,2]= line[,2]
         plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                color = ~as.factor(Var1),showlegend = FALSE,
+                color = ~as.factor(Var1),
                 marker = list(opacity=0.5,width = 2))  %>%
-          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
+          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = FALSE,
                     color = ~as.factor(long$Var1))  %>%
           add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_predicted()[which(cell_predicted()%in%input$celltype_enri)],
                                                       '</br> Cluster: ', long$Var1,
@@ -2549,10 +2402,8 @@ server <- function(input, output) {
     ########## choose cluster 
     ########### do GO 
     output$go <- renderPrint({
-      genelist = ifelse(clu()==input$clus,1,0)
-      names(genelist) = names(clu())
-      GOdata <- new("topGOdata", ontology = "BP", allGenes = genelist, geneSel = function(p) p < 
-              0.01, description = "Test", annot = annFUN.org, mapping = "org.Mm.eg.db", 
+      genelist = clu()
+      GOdata <- new("topGOdata", ontology = "BP", allGenes = genelist, geneSel = function(p) p == input$clus, description = "Test", annot = annFUN.org, mapping = "org.Mm.eg.db", 
             ID = "Symbol")
       resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
       GenTable(GOdata, classicFisher = resultFisher)
