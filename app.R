@@ -169,7 +169,7 @@ ui <-  shinyUI(navbarPage("APP",
                                 conditionalPanel(
                                   condition = "input.procurve == true",
                                   radioButtons(inputId="data_type_pro", "Data type:",
-                                               choices = list("True DNase" = "pro_true","Predicted DNase" = "pro_pred",
+                                               choices = list("Predicted DNase" = "pro_pred","True DNase" = "pro_true",
                                                               "Predicted DNase + True DNase-seq" = "pro_both"),inline=TRUE),
                                   uiOutput('gene_pro2'),
                                   uiOutput('celltype_pro')
@@ -178,7 +178,7 @@ ui <-  shinyUI(navbarPage("APP",
                                 conditionalPanel(
                                   condition = "input.exoncurve == true",
                                   radioButtons(inputId="data_type_exon", "Data type:",
-                                               choices = list("True DNase" = "exon_true","Predicted DNase" = "exon_pred",
+                                               choices = list("Predicted DNase" = "exon_pred","True DNase" = "exon_true",
                                                               "Predicted DNase + True DNase-seq" = "exon_both"),inline=TRUE),
                                   uiOutput('gene_exon2'),
                                   uiOutput('celltype_exon')
@@ -187,7 +187,7 @@ ui <-  shinyUI(navbarPage("APP",
                                 conditionalPanel(
                                   condition = "input.introncurve == true",
                                   radioButtons(inputId="data_type_intron", "Data type:",
-                                               choices = list("True DNase" = "intron_true","Predicted DNase" = "intron_pred",
+                                               choices = list("Predicted DNase" = "intron_pred","True DNase" = "intron_true",
                                                               "Predicted DNase + True DNase-seq" = "intron_both"),inline=TRUE),
                                   uiOutput('gene_intron2'),
                                   uiOutput('celltype_intron')
@@ -196,7 +196,7 @@ ui <-  shinyUI(navbarPage("APP",
                                 conditionalPanel(
                                   condition = "input.enhancercurve == true",
                                   radioButtons(inputId="data_type_enhancer", "Data type:",
-                                               choices = list("True DNase" = "enhancer_true","Predicted DNase" = "enhancer_pred",
+                                               choices = list("Predicted DNase" = "enhancer_pred","True DNase" = "enhancer_true",
                                                               "Predicted DNase + True DNase-seq" = "enhancer_both"),inline=TRUE),
                                   uiOutput('gene_enhancer2'),
                                   uiOutput('celltype_enhancer')
@@ -205,7 +205,7 @@ ui <-  shinyUI(navbarPage("APP",
                                 conditionalPanel(
                                   condition = "input.tfcurve == true",
                                   radioButtons(inputId="data_type_tf", "Data type:",
-                                               choices = list("True DNase" = "tf_true","Predicted DNase" = "tf_pred",
+                                               choices = list("Predicted DNase" = "tf_pred", "True DNase" = "tf_true",
                                                               "Predicted DNase + True DNase-seq" = "tf_both"),inline=TRUE),
                                   uiOutput('gene_tf2'),
                                   uiOutput('celltype_tf')
@@ -409,8 +409,7 @@ server <- function(input, output) {
                        label = "Promoter of Interest",
                        choices = rownames(true_promoter),
                        multiple = T,
-                    #selected = input$gene2,
-                       
+                       #selected = input$gene2,
                        options = list(maxItems = nrow(true_promoter),placeholder = 'Select promoters')
         )
       })
@@ -1687,8 +1686,7 @@ server <- function(input, output) {
           long[,2]= line[,2]
           plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',  
                   marker = list(opacity=0.5,width = 2)) %>% 
-            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers' , showlegend = F,
-            ) %>%
+            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers' , showlegend = F) %>%
             
             add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', cell_intron()[which(cell_intron()%in%input$celltype_intron)],
                                                         '</br> Gene: ', long$Var1,
@@ -2317,8 +2315,6 @@ server <- function(input, output) {
       which(is.na(match(rownames(rna),rownames(true_promoter))))
     })
     
-
-    
     rna_data_gene = reactive({
       rna[-del_enri(),]
     })
@@ -2328,19 +2324,39 @@ server <- function(input, output) {
     })
     
     pos_dnase = reactive({
-      which(cell_true()%in%input$celltype_enri)
+      which(cell_enri()%in%input$celltype_enri)
     })
     
-     cell_promoter_chose = reactive({
-       cell_true()[pos_dnase()]
+
+     
+     enri_promoter = reactive({
+         if (input$enri_type == 'true'){
+           pro_true_dat()
+         }else if (input$enri_type == 'pred'){
+           pro_pred_dat()
+         }else if (input$enri_type == 'both'){
+           cbind(pro_pred_dat()[,-rep_pro()],pro_true_dat())
+         }
+       })
+     
+     dat_enri = reactive({
+       if (input$enri_type == 'true'){
+         dat_true()
+       }else if (input$enri_type == 'pred'){
+         dat_predicted()
+       }else if (input$enri_type == 'both'){
+         cbind(dat_predicted()[,-rep_tf()],dat_true())
+       }
      })
      
     promoter_chose_gene = reactive({
-      true_promoter[gene_pos(),pos_dnase()]
+      enri_promoter()[gene_pos(),pos_dnase()]
     })
     
+
+    
     promoter_chose_raw = reactive({
-      dat_true()[,pos_dnase()]
+      dat_enri()[,pos_dnase()]
     })
     
     ## construct peusdo time  
@@ -2427,13 +2443,22 @@ server <- function(input, output) {
       clu()[-del_enri_exon()]
     })
     
-
+    enri_exon = reactive({
+      if (input$enri_type == 'true'){
+        exon_true_dat()
+      }else if (input$enri_type == 'pred'){
+        exon_pred_dat()
+      }else if (input$enri_type == 'both'){
+        cbind(exon_pred_dat()[,-rep_exon()],exon_true_dat())
+      }
+    })
+    
     exon_chose_gene= reactive({
-      true_exon[gene_pos_exon(),pos_dnase()]
+      enri_exon()[gene_pos_exon(),pos_dnase()]
     })
     
     exon_chose_raw = reactive({
-      dat_true()[,pos_dnase()]
+      dat_enri()[,pos_dnase()]
     })
     
     ## construct peusdo time  
@@ -2510,14 +2535,25 @@ server <- function(input, output) {
     clu_gene_intron = reactive({
       clu()[-del_enri_intron()]
     })
-
+    
+    enri_intron = reactive({
+      if (input$enri_type == 'true'){
+        intron_true_dat()
+      }else if (input$enri_type == 'pred'){
+        intron_pred_dat()
+      }else if (input$enri_type == 'both'){
+        cbind(intron_pred_dat()[,-rep_intron()],intron_true_dat())
+      }
+    })
+    
     intron_chose_gene= reactive({
-      true_intron[gene_pos_intron(),pos_dnase()]
+      enri_intron()[gene_pos_intron(),pos_dnase()]
     })
     
     intron_chose_raw = reactive({
-      dat_true()[,pos_dnase()]
+      dat_enri()[,pos_dnase()]
     })
+    
     
     ## construct peusdo time  
     intron_order = reactive({
