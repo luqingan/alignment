@@ -46,12 +46,8 @@ require(TSCAN)
 library(shinycssloaders)
 
 load("rnaseq.rda") ## clustered, 2000 row
-load("raw.rda")
 load("info.rda")
 load("mnn.rda")
-load("comb.rda")
-load("iter.rda")
-#load('ave_dist.rda')
 
 load('true_promoter.rda')
 load('pred_promoter.rda')
@@ -80,13 +76,6 @@ ui <-  shinyUI(navbarPage("APP",
                                   ),
                                   uiOutput('cate_shape')
                                 ),
-                                h3('Method selection'),
-                                checkboxInput("method", 'Correction methods'),
-                                conditionalPanel(
-                                  condition = "input.method== true",
-                                  selectInput("corr", "Batch correction method", 
-                                              list("uncorrected"="uncorrected", "combat"="comb","mnn"="mnn","iterated mnn"="iter")
-                                  )),
                                 h3("Filtering"),
                                 checkboxInput("filter", 'Filter data'),
                                 conditionalPanel(
@@ -270,9 +259,9 @@ server <- function(input, output) {
     output$search <- renderUI({
       selectizeInput("search",
                      label = "Sample of Interest",
-                     choices = colnames(raw),
+                     choices = colnames(mnn),
                      multiple = T,
-                     options = list(maxItems = nrow(raw), placeholder = 'Select a sample')
+                     options = list(maxItems = nrow(mnn), placeholder = 'Select a sample')
       )
     })
     
@@ -495,17 +484,7 @@ server <- function(input, output) {
     
     ### selected whole data (correction)
     dat_sel = reactive({
-      if (input$corr=='uncorrected'){
-        d = raw[,pos_sel()]
-        colnames(d) = colnames(raw)[pos_sel()]
-        d
-      }else if (input$corr=='comb'){
-        comb[,pos_sel()]
-      }else if (input$corr=='mnn'){
         mnn[,pos_sel()]
-      }else{
-        iter[,pos_sel()]
-      }
     })
     
     cell_sel = reactive({
@@ -1018,7 +997,7 @@ server <- function(input, output) {
           add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
           ) %>%
 
-          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_predicted()[match(order(), colnames(raw))],each=2),
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_predicted()[match(order(), colnames(mnn))],each=2),
 
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
@@ -1047,7 +1026,7 @@ server <- function(input, output) {
                 marker = list(opacity=0.5,width = 2)) %>%
           add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
                     color = ~long$Var1)  %>%
-          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_predicted()[match(order_rna(), colnames(raw))],each=2),
+          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_predicted()[match(order_rna(), colnames(mnn))],each=2),
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
           layout(title = paste0( 'Gene expression curve of ',input$celltype),
@@ -1227,7 +1206,7 @@ server <- function(input, output) {
     #       plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='', 
     #               marker = list(opacity=0.5,width = 2)) %>% 
     #         add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
-    #         add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_pro()[match(order_pro(), colnames(raw))],each=2),
+    #         add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_pro()[match(order_pro(), colnames(mnn))],each=2),
     #                                                     '</br> Gene: ', long$Var1,
     #                                                     '</br> Sample: ',long$Var2))%>%
     #         layout(title = paste0( 'Promoter expression curve of ',input$celltype_pro),
@@ -1255,7 +1234,7 @@ server <- function(input, output) {
     #               marker = list(opacity=0.5,width = 2)) %>%
     #         add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
     #                   color = ~long$Var1)  %>%
-    #         add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_pro()[match(order_pro(), colnames(raw))],each=2),
+    #         add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_pro()[match(order_pro(), colnames(mnn))],each=2),
     #                                                     '</br> Gene: ', long$Var1,
     #                                                     '</br> Sample: ',long$Var2))%>%
     #         layout(title = paste0( 'Promoter expression curve of ',input$celltype_pro),
@@ -1422,7 +1401,7 @@ server <- function(input, output) {
     #               marker = list(opacity=0.5,width = 2)) %>% 
     #         add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
     #         )  %>%
-    #         add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_enhancer()[match(order_enhancer(), colnames(raw))],each = 2),
+    #         add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_enhancer()[match(order_enhancer(), colnames(mnn))],each = 2),
     #                                                     '</br> Gene: ', long$Var1,
     #                                                     '</br> Sample: ',long$Var2))%>%
     #         layout(title = paste0( 'Enhancer curve of ',input$celltype_enhancer),
@@ -1450,7 +1429,7 @@ server <- function(input, output) {
     #               marker = list(opacity=0.5,width = 2)) %>%
     #         add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',   showlegend = F,
     #                   color = ~long$Var1)  %>%
-    #         add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_enhancer()[match(order_enhancer(), colnames(raw))],each = 2),
+    #         add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_enhancer()[match(order_enhancer(), colnames(mnn))],each = 2),
     #                                                     '</br> Gene: ', long$Var1,
     #                                                     '</br> Sample: ',long$Var2))%>%
     #         layout(title = paste0( 'Enhancer expression curve of ',input$celltype_enhancer),
@@ -1624,7 +1603,7 @@ server <- function(input, output) {
     #             marker = list(opacity=0.5,width = 2)) %>% 
     #       add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers'
     #       ) %>%
-    #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_tf()[match(order_tf(), colnames(raw))],each = 2),
+    #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_tf()[match(order_tf(), colnames(mnn))],each = 2),
     #                                                   '</br> Gene: ', long$Var1,
     #                                                   '</br> Sample: ',long$Var2))%>%
     #       layout(title = paste0( 'Transcription factor curve of ',input$celltype_tf),
@@ -1652,7 +1631,7 @@ server <- function(input, output) {
     #       add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',
     #                 color = ~long$Var1,
     #                 showlegend = F)  %>%
-    #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_tf()[match(order_tf(), colnames(raw))],each = 2),
+    #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_tf()[match(order_tf(), colnames(mnn))],each = 2),
     #                                                   '</br> Gene: ', long$Var1,
     #                                                   '</br> Sample: ',long$Var2))%>%
     #       layout(title = paste0( 'Transcription factor expression curve of ',input$celltype_tf),
