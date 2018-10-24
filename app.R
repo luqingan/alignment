@@ -52,11 +52,14 @@ load("optimized.rda") # k=25,sigma = 0.297540831779859
 # load("X_mnn.rda") # k=25,sigma = 0.297540831779859
 # load("X_mnn2.rda") # k=25,sigma = 0.297540831779859
 # load("X_mnn3.rda") # k=25,sigma = 0.297540831779859
+# load('order_rna_rna_new.rda')
+# load('order_rna_true_new.rda')
+# load('order_rna_comb_new.rda')
 load('order_rna_rna.rda')
 load('order_rna_true.rda')
 load('order_rna_comb.rda')
 
-load('order_pred_rna.rda')
+load('order_pred_rna.rda') # use corr(true_opt_n,pred_opt_n)
 load('order_pred_true.rda')
 load('order_pred_comb.rda')
 
@@ -163,13 +166,15 @@ ui <-  shinyUI(navbarPage("APP",
                                   h5('Gene expression curve'),
                                   uiOutput('gene2'),
                                   
+                                  h5('Transcription factor curve'),
+                                  
+                                  uiOutput('gene_tf2'),
+                                  
                                   h5('Promoter curve'),
                                   
                                   uiOutput('gene_pro2'),
 
-                                  h5('Transcription factor curve'),
-                              
-                                  uiOutput('gene_tf2'),
+                         
                                   h5('Enhancer curve'),
                                   uiOutput('gene_enhancer2')
   
@@ -305,34 +310,11 @@ server <- function(input, output) {
     })
     
 
-    
-    ######### promoter
-      output$gene_pro <- renderUI({
-        selectizeInput("gene_pro",
-                       label = "Promoter of Interest",
-                       choices = rownames(true_promoter),
-                       multiple = F,
-                       #selected = input$gene,
-                       options = list(placeholder = 'Select promoters')
-             
-        )
-      })
-      output$gene_pro2 <- renderUI({
-        selectizeInput("gene_pro2",
-                       label = "Promoter of Interest",
-                       choices = rownames(true_promoter),
-                       multiple = T,
-                       #selected = input$gene2,
-                       options = list(maxItems = nrow(true_promoter),placeholder = 'Select promoters')
-        )
-      })
-
-
       #######Transcription factor
       output$gene_tf <- renderUI({
         selectizeInput("gene_tf",
                        label = "Transcription factor of Interest",
-                       choices = rownames(x_q),
+                       choices = rownames(true_tf_qn),
                        multiple = F,
                        #selected = input$gene,
                        options = list(placeholder = 'Select transcription factors')
@@ -349,8 +331,30 @@ server <- function(input, output) {
         )
       })
   
-
-      ##enhancer
+      
+    ######### promoter
+      output$gene_pro <- renderUI({
+        selectizeInput("gene_pro",
+                       label = "Promoter of Interest",
+                       choices = rownames(true_promoter),
+                       multiple = F,
+                       #selected = input$gene,
+                       options = list(placeholder = 'Select promoters')
+                       
+        )
+      })
+      output$gene_pro2 <- renderUI({
+        selectizeInput("gene_pro2",
+                       label = "Promoter of Interest",
+                       choices = rownames(true_promoter),
+                       multiple = T,
+                       #selected = input$gene2,
+                       options = list(maxItems = nrow(true_promoter),placeholder = 'Select promoters')
+        )
+      })
+      
+      
+    ###### enhancer
       output$gene_enhancer <- renderUI({
         selectizeInput("gene_enhancer",
                        label = "Enhancer of Interest",
@@ -419,7 +423,7 @@ server <- function(input, output) {
     
     output$cate_shape  <- renderUI({
       selectInput("cate_shape", "Select category (shape)",
-                  list('Assay' = 'assay',"Biosample type"="bio", "Cell type"="cell","Germ layer"="layer",'cancer' = 'Cancer'),
+                  list('Assay' = 'assay',"Biosample type"="bio", "Cell type"="cell","Germ layer"="layer",'Cancer' = 'Cancer'),
                   selected = input$cate_color)
     })
     
@@ -498,7 +502,8 @@ server <- function(input, output) {
     })
     
     dat = reactive({
-      dat_sel()[,keep()]
+      dat_sel()[rowMeans(dat_sel() > 0)>0.5,keep()]
+      
     })
     #rna 
     rna_dat = reactive({
@@ -608,7 +613,7 @@ server <- function(input, output) {
     del_cv =  reactive({
       dd = dat()
       cv = apply(dd,1,sd)/rowMeans(dd)
-      which(cv>0)
+      which(cv>quantile(cv)[2])
     })
     
     dat_cv =  reactive({
@@ -616,22 +621,7 @@ server <- function(input, output) {
       dd[del_cv(),]
     })
 
-    output$impo = renderPrint({
-      dim(dat_cv())
-    })
-    output$curve_text = renderPrint({
-      dim(dat_sel())
-    })
 
-    output$exon_curve_text = optimized({
-      dim(optimized[rowMeans(optimized_n > 0)>0.5,pos_sel()])
-    })
-
-    output$intron_curve_text = renderPrint({
-      optimized_k= optimized[rowMeans(optimized > 0)>0.5,pos_sel()]
-      cv = apply(optimized_k,1,sd)/rowMeans(optimized_k)
-      dim(optimized_k[which(cv> 4),])
-       })
     
     pca = reactive({
       pca_unc=prcomp(t((dat_cv())),scale=T)$x
@@ -729,8 +719,7 @@ server <- function(input, output) {
       }
     })
 
-    
-    
+
     order_rna = reactive({
       if (!is.null(input$celltype)){
         cell_order = vector("list", 3) 
@@ -913,6 +902,22 @@ server <- function(input, output) {
       melt(line)
     })
 
+    # output$impo = renderPrint({
+    #  head(long())
+    # })
+    # output$curve_text = renderPrint({
+    #  head(line())
+    #   
+    # })
+    # 
+    # output$exon_curve_text = renderPrint({
+    #   head(time())
+    # })
+    # 
+    # output$intron_curve_text = renderPrint({
+    #   cell_predicted()[match(order(), colnames(optimized))]
+    #   
+    # })
     
 
     output$curve1 =renderPlotly({
