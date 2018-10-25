@@ -48,29 +48,12 @@ library(shinycssloaders)
 load("rnaseq.rda") ## clustered, 2000 row
 load("info.rda")
 load("optimized.rda") # k=25,sigma = 0.297540831779859
-# load("mnn.rda") # k=25,sigma = 0.297540831779859
-# load("X_mnn.rda") # k=25,sigma = 0.297540831779859
-# load("X_mnn2.rda") # k=25,sigma = 0.297540831779859
-# load("X_mnn3.rda") # k=25,sigma = 0.297540831779859
-# load('order_rna_rna_new.rda')
-# load('order_rna_true_new.rda')
-# load('order_rna_comb_new.rda')
-load('order_rna_rna.rda')
-load('order_rna_true.rda')
-load('order_rna_comb.rda')
 
-load('order_pred_rna.rda') # use corr(true_opt_n,pred_opt_n)
-load('order_pred_true.rda')
-load('order_pred_comb.rda')
-
-load('order_true_rna.rda')
-load('order_true_true.rda')
-load('order_true_comb.rda')
-
-load('order_comb_rna.rda')
-load('order_comb_true.rda')
-load('order_comb_comb.rda')
-
+#  load('order_rna_rna_new.rda')
+#  load('order_rna_true_new.rda')
+#  load('order_rna_comb_new.rda')
+# 
+# 
 load('true_promoter.rda')
 load('pred_promoter.rda')
 load('true_enhancer.rda')
@@ -82,7 +65,6 @@ rna <- readRDS("RNA_data_norm_hg19_all_name.rds") #
 
 ui <-  shinyUI(navbarPage("APP",
                           tabPanel("APP", fluidPage(
-                            #headerPanel("GrowthAnalyst"),
                             sidebarLayout(
                               sidebarPanel(
                                 h3('Data processing'),
@@ -96,13 +78,7 @@ ui <-  shinyUI(navbarPage("APP",
                                   ),
                                   uiOutput('cate_shape')
                                 ),
-                                # h3('Method selection'),
-                                # checkboxInput("method", 'Correction methods'),
-                                # conditionalPanel(
-                                #   condition = "input.method== true",
-                                #   selectInput("corr", "Batch correction method", 
-                                #               list( 'Optimized MNN' = 'opt',"uncorrected"="uncorrected", "combat"="comb","mnn"="mnn","iterated mnn"="iter")
-                                #   )),
+
                                 h3("Filtering"),
                                 checkboxInput("filter", 'Filter data'),
                                 conditionalPanel(
@@ -158,8 +134,9 @@ ui <-  shinyUI(navbarPage("APP",
                                   radioButtons(inputId="pseudo", "Construct pseudo time with:",
                                                choices = list("RNA-seq" = "rna_pseudo",
                                                               'Predicted DNase-seq' = 'pred_pseudo',
-                                                              'True DNase-seq'= 'true_pseudo',
-                                                              'Predicted DNase-seq + True DNase-seq'='comb_pseudo'),
+                                                              'True DNase-seq'= 'true_pseudo'),
+                                                             # 'Predicted DNase-seq + True DNase-seq'='comb_pseudo'),
+                                               selected = 'rna_pseudo',
                                                inline=TRUE),
                                   uiOutput('celltype'),
                                   
@@ -176,7 +153,16 @@ ui <-  shinyUI(navbarPage("APP",
 
                          
                                   h5('Enhancer curve'),
-                                  uiOutput('gene_enhancer2')
+                                  uiOutput('gene_enhancer2'),
+                                  checkboxInput("new", 'Construct new pseudo time'),
+                                  conditionalPanel(
+                                    condition = "input.new == true",
+                                  radioButtons(inputId="pseudo", "Construct new pseudo time with:",
+                                                 choices = list("RNA-seq" = "rna_pseudo",
+                                                                'Predicted DNase-seq' = 'pred_pseudo',
+                                                                'True DNase-seq'= 'true_pseudo'),
+                                                 inline=TRUE)
+                                  )
   
                                 
                                 )
@@ -200,24 +186,27 @@ ui <-  shinyUI(navbarPage("APP",
                                   tabPanel("Heatmaps", 
                                            h4('Gene expression heatmap'),
                                            plotlyOutput('heat1')%>% withSpinner(),
+                                           hr(),
                                            plotlyOutput('heat_pca1')%>% withSpinner(),
-                                           
-
-                                           h4('Promoter heatmap'),
-                                           plotlyOutput('heat_promoter')%>% withSpinner(),
-                                           plotlyOutput('heat_promoter_pca')%>% withSpinner(),
-                        
-                                           h4('Enhancer heatmap'),
-                                           plotlyOutput('heat_enhancer')%>% withSpinner(),
-                                           plotlyOutput('heat_enhancer_pca')%>% withSpinner(),
                                            h4('Transcription factor heatmap'),
                                            plotlyOutput('heat_tf')%>% withSpinner(),
-                                           plotlyOutput('heat_tf_pca')%>% withSpinner()
+                                           hr(),
+                                           plotlyOutput('heat_tf_pca')%>% withSpinner(),
+
+                                           h4('Promoter activitiy heatmap'),
+                                           plotlyOutput('heat_promoter')%>% withSpinner(),
+                                           hr(),
+                                           plotlyOutput('heat_promoter_pca')%>% withSpinner(),
+                        
+                                           h4('Enhancer activitiy heatmap'),
+                                           plotlyOutput('heat_enhancer')%>% withSpinner(),
+                                           hr(),
+                                           plotlyOutput('heat_enhancer_pca')%>% withSpinner()
+                           
                                   ),
                                   tabPanel("Gene expression curve", 
                                            h4('Gene expression curve'),
                                            plotlyOutput('curve1')%>% withSpinner(),
-                                           #plotOutput('pca_curve')%>% withSpinner(),
                                            verbatimTextOutput("impo"),
                                            verbatimTextOutput('curve_text'),
                                            verbatimTextOutput('exon_curve_text'),
@@ -229,31 +218,58 @@ ui <-  shinyUI(navbarPage("APP",
                                            h2(),
                                            plotlyOutput('tf_curve_true')%>% withSpinner(),
                                            h2(),
-                                           plotlyOutput('tf_curve_comb')%>% withSpinner(),
+                                           # plotlyOutput('tf_curve_comb')%>% withSpinner(),
                                            
                                            h4('Promoter curve'),
                                            plotlyOutput('promoter_curve_pred')%>% withSpinner(),
                                            h2(),
                                            plotlyOutput('promoter_curve_true')%>% withSpinner(),
                                            h2(),
-                                           plotlyOutput('promoter_curve_comb')%>% withSpinner(),
-                                           
-                 
+                                           # plotlyOutput('promoter_curve_comb')%>% withSpinner(),
                                            h4('Enhancer curve'),
                                            plotlyOutput('enhancer_curve_pred')%>% withSpinner(),
                                            h2(),
                                            plotlyOutput('enhancer_curve_true')%>% withSpinner(),
                                            h2(),
-                                           plotlyOutput('enhancer_curve_comb')%>% withSpinner()
-                                       
-                                  )
+                                           # plotlyOutput('enhancer_curve_comb')%>% withSpinner(),
+                                           
+                                           h4('Pseudo time'),
+                                           plotOutput('pca_curve')%>% withSpinner()
                                   )
                                 )# end of tabset panel
                               )# end of main panel
                             )
+                          )),
+                          tabPanel("New Data", fluidPage(
+                            sidebarLayout(
+                              sidebarPanel(
+                                helpText("Upload dataset"),
+                                # Input: Select a file ----
+                                fileInput("file1", "Upload new RNA-seq data",
+                                          multiple = TRUE,
+                                          accept = c("text/csv",
+                                                     "text/comma-separated-values,text/plain",
+                                                     ".csv")),
+                                checkboxInput("timecourse", label = 'Time Course?')
+                              ),
+                              mainPanel(
+                                tags$style(type="text/css",
+                                           ".shiny-output-error { visibility: hidden; }",
+                                           ".shiny-output-error:before { visibility: hidden; }"),
+                                tabsetPanel(
+                                  tabPanel("New", 
+                                           h4('Predicted TF activities + True RNA-seq'),
+                                           plotlyOutput('pse_1')%>% withSpinner(),
+                                           h4('True TF activities + Pseudo RNA-seq'),
+                                           plotlyOutput('pse_2')%>% withSpinner()
+                                  )
+                                )
+                              )
+                            )
                           )
-                          ))
-
+                          )
+)
+)
 
 
 
@@ -266,11 +282,9 @@ server <- function(input, output) {
     batch[info[,3]=='predicted']='Predicted DNase'
     batch[info[,3]=='true']='True DNase' 
     bat = ifelse(batch=='True DNase',2,1)
-    link= gsub("@.*","",info[,4])
-    layer=info[,5]
-    bio = info[,6]
-    
-    
+    layer=info[,4]
+    bio = info[,5]
+
     ###input 
     output$search <- renderUI({
       selectizeInput("search",
@@ -718,167 +732,262 @@ server <- function(input, output) {
         }
       }
     })
-
-
-    order_rna = reactive({
-      if (!is.null(input$celltype)){
-        cell_order = vector("list", 3) 
-            if (input$pseudo == 'rna_pseudo'){
-              for (j in 1:3){
-                cell_order[[j]] = cell[match(order_rna_rna[[j]],colnames(optimized))]
-              }
-              cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-              route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-              cell_pos = cell_chose[[route]]
-              order_rna_rna[[route]][cell_pos]
-            }else if (input$pseudo == 'true_pseudo'){
-              for (j in 1:3){
-                cell_order[[j]] = cell[match(order_true_rna[[j]],colnames(optimized))]
-              }
-              cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-              route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-              cell_pos = cell_chose[[route]]
-              order_true_rna[[route]][cell_pos]
-            }else if (input$pseudo == 'pred_pseudo'){
-              for (j in 1:3){
-                cell_order[[j]] = cell[match(order_pred_rna[[j]],colnames(optimized))]
-              }
-              cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-              route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-              cell_pos = cell_chose[[route]]
-              order_pred_rna[[route]][cell_pos]
-            }else if (input$pseudo == 'comb_pseudo'){
-              for (j in 1:3){
-                cell_order[[j]] = cell[match(order_comb_rna[[j]],colnames(optimized))]
-              }
-              cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-              route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-              cell_pos = cell_chose[[route]]
-              order_comb_rna[[route]][cell_pos]
-            }
-      }
+    rna_k = reactive({
+      rna_dat()[,which(cell_predicted()%in%input$celltype)]
     })
     
-    order_pred = reactive({
-      if (!is.null(input$celltype)){
-        cell_order = vector("list", 3) 
-        if (input$pseudo == 'rna_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_rna_rna[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_rna_rna[[route]][cell_pos]
-        }else if (input$pseudo == 'true_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_true_rna[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_true_rna[[route]][cell_pos]
-        }else if (input$pseudo == 'pred_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_pred_rna[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_pred_rna[[route]][cell_pos]
-        }else if (input$pseudo == 'comb_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_comb_rna[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_comb_rna[[route]][cell_pos]
-        }
+    pred_k =  reactive({
+      dat_predicted()[,which(cell_predicted()%in%input$celltype)]
+    })
+    
+    true_k =  reactive({
+      dat_true()[,which(cell_true()%in%input$celltype)]
+    })
+    
+    mc = reactive({
+      if (input$pseudo == 'rna_pseudo'){
+        data_mc = rna_k()
+        cell_mc = cell_predicted()
+      }else if (input$pseudo == 'true_pseudo'){
+        data_mc = true_k()
+        cell_mc = cell_true()
+      }else if (input$pseudo == 'pred_pseudo'){
+        data_mc = pred_k()
+        cell_mc = cell_predicted()
+      # }else if (input$pseudo == 'comb_pseudo'){
+      #   ### replicate sample, use true data 
+      #   data_mc = cbind(pred_k(),true_k())
+      #   cell_mc = cell_var()
       }
+      set.seed(10)
+      exprmclust(data_mc)
+    })
+    
+    
+    order <- reactive({
+      TSCANorder(mc(),listbranch = F)
+    })
+
+
+    # order_true = reactive({
+    #   if (!is.null(input$celltype)){
+    #     order = order()
+    #       if (input$pseudo == 'true_pseudo'){
+    #         order
+    #       }else if (input$pseudo == 'comb_pseudo'){
+    #         order[na.omit(match(colnames(true_k()),order))]
+    #       }else{
+    #         pos_max =  apply(t(corr()), 1, which.max) 
+    #         insert = rep(0,ncol(true_k()))
+    #         for (i in c(1:length(pos_max))){
+    #           cor_in = corr[i,pos_max[i]]
+    #           pos = match(colnames(pred_k)[pos_max[i]],order)
+    #           if (1<pos& pos<length(order)){
+    #             cor_prev = corr[i,match(order[pos-1],colnames(pred_k))]
+    #             cor_next = corr[i,match(order[pos+1],colnames(pred_k))]
+    #             if (cor_prev>cor_next){
+    #               insert[i] = pos-1 + cor_in
+    #             }else{
+    #               insert[i] = pos+1- cor_in
+    #             }
+    #           }else if (pos==1){
+    #             insert[i] = pos+1- cor_in
+    #           }else{
+    #             insert[i] = pos-1 + cor_in
+    #           }
+    #         }
+    #         insert = na.omit(insert)
+    #         names(insert) = names(pos_max)
+    #         order = sort(insert)
+    #         names(order)
+    #       }
+    # 
+    #     }
+    # })
+    
+    
+    # order_comb = reactive({
+    #   if (!is.null(input$celltype)){
+    #       order = order()
+    #       if (input$pseudo == 'true_pseudo'){
+    #         if (is.na(match(colnames(true_k()),order()))){
+    #           true_k = true_k()[,-which(is.na(match(colnames(true_k()),order())))]
+    #         }else{
+    #           true_k=true_k()
+    #         }
+    #         
+    #       pred_k = pred_k()
+    #       corr = cor(pred_k(),true_k())
+    #         pos_max =  apply(corr, 1, which.max) 
+    #         insert = rep(0,ncol(rna_k()))
+    #         for (i in c(1:length(pos_max))){
+    #           cor_in = corr[i,pos_max[i]]
+    #           pos = match(colnames(true_k)[pos_max[i]],order())
+    #           if (1<pos& pos<length(order)){
+    #             cor_prev = corr[i,match(order[pos-1],colnames(true_k))]
+    #             cor_next = corr[i,match(order[pos+1],colnames(true_k))]
+    #             if (cor_prev>cor_next){
+    #               insert[i] = pos-1 + cor_in
+    #             }else{
+    #               insert[i] = pos+1- cor_in
+    #             }
+    #           }else if (pos==1){
+    #             insert[i] = pos+1- cor_in
+    #           }else{
+    #             insert[i] = pos-1 + cor_in
+    #           }
+    #         }
+    #         insert = na.omit(insert)
+    #         names(insert) = names(pos_max)
+    #         order = sort(insert)
+    #         names(order)
+    #         insert = na.omit(insert)
+    #         names(insert) = names(pos_max)
+    #         base = c(1:length(order))
+    #         names(base) = order
+    #         names(sort(c(insert,base)))
+    #   }else if (input$pseudo == 'comb_pseudo'){
+    #     order()
+    #   }else{
+    #     true_k = true_k()
+    #     if (is.na(match(colnames(pred_k()),order()))){
+    #       pred_k = pred_k()[,-which(is.na(match(colnames(pred_k()),order())))]
+    #     }else{
+    #       pred_k=pred_k()
+    #     }
+    #     corr = cor(true_k,pred_k)
+    #     pos_max =  apply(corr, 1, which.max) 
+    #     insert = rep(0,ncol(true_k()))
+    #     for (i in c(1:length(pos_max))){
+    #       cor_in = corr[i,pos_max[i]]
+    #       pos = match(colnames(pred_k)[pos_max[i]],order())
+    #       if (1<pos& pos<length(order)){
+    #         cor_prev = corr[i,match(order[pos-1],colnames(pred_k))]
+    #         cor_next = corr[i,match(order[pos+1],colnames(pred_k))]
+    #         if (cor_prev>cor_next){
+    #           insert[i] = pos-1 + cor_in
+    #         }else{
+    #           insert[i] = pos+1- cor_in
+    #         }
+    #       }else if (pos==1){
+    #         insert[i] = pos+1- cor_in
+    #       }else{
+    #         insert[i] = pos-1 + cor_in
+    #       }
+    #     }
+    #     insert = na.omit(insert)
+    #     names(insert) = names(pos_max)
+    #     order = sort(insert)
+    #     names(order)
+    #     insert = na.omit(insert)
+    #     names(insert) = names(pos_max)
+    #     base = c(1:length(order))
+    #     names(base) = order
+    #     names(sort(c(insert,base)))
+    #    }
+    #     }
+    # })
+    
+   
+    order_rna = reactive({
+     if (!is.null(input$celltype)){
+       if (input$pseudo == 'true_pseudo'){
+         if (length(which(is.na(match(colnames(true_k()),order())))>0)){
+          true_k = true_k()[,-which(is.na(match(colnames(true_k()),order())))]
+        }else{
+          true_k=true_k()
+        }
+        pred_k = pred_k()
+        corr = cor(pred_k,true_k)
+        pos_max =  apply(corr, 1, which.max) 
+        insert = rep(0,length(pos_max))
+        for (i in c(1:length(pos_max))){
+          # if (1<pos_max[i] & pos_max[i]<length(order())){
+          #   cor_in = corr[i,pos_max[i]]
+            pos = match(colnames(true_k)[pos_max[i]],order())
+            cor_in = corr[i,pos_max[i]]
+              if (1<pos& pos<length(order())){
+                          cor_prev = corr[i,match(order()[pos-1],colnames(true_k))]
+                          cor_next = corr[i,match(order()[pos+1],colnames(true_k))]
+                            if (cor_prev>cor_next){
+                              insert[i] = pos-1 + cor_in
+                            }else{
+                              insert[i] = pos+1- cor_in
+                            }
+                          }else if (pos==1){
+                            insert[i] = pos+1- cor_in
+                          }else{
+                            insert[i] = pos-1 + cor_in
+          }
+        }
+        names(insert) = names(pos_max)
+        order = sort(insert)
+        names(order)
+      }else{
+        order()
+      }
+     }
+    })
+
+    
+    # output$impo = renderPrint({
+    # 
+    #       })
+    # 
+    # output$curve_text = renderPrint({
+    # 
+    # })
+    # 
+    # output$exon_curve_text = renderPrint({
+    #   
+    # })
+    # 
+    # output$intron_curve_text = renderPrint({
+    # })
+    
+    
+    order_pred = reactive({
+      order_rna()
     })
     
     order_true = reactive({
       if (!is.null(input$celltype)){
-        cell_order = vector("list", 3) 
-        if (input$pseudo == 'rna_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_rna_true[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_rna_true[[route]][cell_pos]
-        }else if (input$pseudo == 'true_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_true_true[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_true_true[[route]][cell_pos]
-        }else if (input$pseudo == 'pred_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_pred_true[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_pred_true[[route]][cell_pos]
-        }else if (input$pseudo == 'comb_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_comb_true[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_comb_true[[route]][cell_pos]
+       if (input$pseudo == 'true_pseudo'){
+        order()
+      }else{
+        true_k = true_k()
+        if (length(which(is.na(match(colnames(pred_k()),order())))>0)){
+          pred_k = pred_k()[,-which(is.na(match(colnames(pred_k()),order())))]
+        }else{
+          pred_k=pred_k()
         }
+        corr = cor(true_k,pred_k)
+        pos_max =  apply(corr, 1, which.max) 
+        insert = rep(0,length(pos_max))
+        for (i in c(1:length(pos_max))){
+                      cor_in = corr[i,pos_max[i]]
+                      pos = match(colnames(pred_k)[pos_max[i]],order())
+                      if (1<pos& pos<length(order())){
+                        cor_prev = corr[i,match(order()[pos-1],colnames(pred_k))]
+                        cor_next = corr[i,match(order()[pos+1],colnames(pred_k))]
+                        if (cor_prev>cor_next){
+                          insert[i] = pos-1 + cor_in
+                        }else{
+                          insert[i] = pos+1- cor_in
+                        }
+                      }else if (pos==1){
+                        insert[i] = pos+1- cor_in
+                      }else{
+                        insert[i] = pos-1 + cor_in
+          }
+        }
+        names(insert) = names(pos_max)
+        order_true = sort(insert)
+        names(order_true)
+      }
       }
     })
     
-    
-    order_comb = reactive({
-      if (!is.null(input$celltype)){
-        cell_order = vector("list", 3) 
-        if (input$pseudo == 'rna_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_rna_comb[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_rna_comb[[route]][cell_pos]
-        }else if (input$pseudo == 'true_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_true_comb[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_true_comb[[route]][cell_pos]
-        }else if (input$pseudo == 'pred_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_pred_comb[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_pred_comb[[route]][cell_pos]
-        }else if (input$pseudo == 'comb_pseudo'){
-          for (j in 1:3){
-            cell_order[[j]] = cell[match(order_comb_comb[[j]],colnames(optimized))]
-          }
-          cell_chose = lapply(1:3, function(i) which(cell_order[[i]]%in%input$celltype))
-          route = which.max(c(length(cell_chose[[1]]),length(cell_chose[[2]]),length(cell_chose[[3]])))
-          cell_pos = cell_chose[[route]]
-          order_comb_comb[[route]][cell_pos]
-        }
-      }
-    })
-    
-    
-
     
     time = reactive({
       if (length(input$gene2) == 1){
@@ -902,22 +1011,6 @@ server <- function(input, output) {
       melt(line)
     })
 
-    # output$impo = renderPrint({
-    #  head(long())
-    # })
-    # output$curve_text = renderPrint({
-    #  head(line())
-    #   
-    # })
-    # 
-    # output$exon_curve_text = renderPrint({
-    #   head(time())
-    # })
-    # 
-    # output$intron_curve_text = renderPrint({
-    #   cell_predicted()[match(order(), colnames(optimized))]
-    #   
-    # })
     
 
     output$curve1 =renderPlotly({
@@ -997,50 +1090,52 @@ server <- function(input, output) {
       }
     })
 
-    # output$pca_curve <- renderPlot({
-    #   if (!is.null(input$celltype)){
-    #     if (input$pseudo == 'rna_pseudo'){
-    #       cell_time = cell_predicted()[which(cell_predicted()%in%input$celltype)]
-    #     }else if (input$pseudo == 'true_pseudo'){
-    #       cell_time = cell_true()[which(cell_true()%in%input$celltype)]
-    #     }else if (input$pseudo == 'pred_pseudo'){
-    #       cell_time = cell_predicted()[which(cell_predicted()%in%input$celltype)]
-    #     }else if (input$pseudo == 'comb_pseudo'){
-    #       cell_time = cell_var()[which(cell_var()%in%input$celltype)]
-    #     }
-    #     mc=mc()
-    #     cell_line=unique(cell_time)
-    #     n.clust = c(1:max(unique(mc[[3]])))
-    #     clu=mc[[3]]
-    #     type_clu=lapply(n.clust, function(i) cell_time[which(clu==i)])  # find cell type in each cluster
-    #     n = lapply(n.clust,function(i) length(type_clu[[i]]))
-    #     x = lapply(n.clust,function(i)
-    #       unlist(lapply(cell_line,function(j) sum(type_clu[[i]]==j)))
-    #     )
-    #     pvalue = lapply(n.clust,function(i)
-    #       unlist(lapply(c(1:length(cell_line)),function(j) poisson.test(unlist(x[[i]][j]),unlist(n[i]))$p.value))
-    #     )
-    #     pvalue_k=lapply(n.clust, function(i) pvalue[[i]][which(x[[i]]!=0)])
-    #     per = lapply(n.clust,function(i)
-    #       unlist(lapply(c(1:length(cell_line)),function(j) paste(cell_line[j],':',round(100*unlist(x[[i]][[j]])/unlist(n[i]),2), "%")))
-    #     )
-    #     per_k = lapply(n.clust, function(i) per[[i]][which(x[[i]]!=0)])
-    #     enrich_gene_per = lapply(n.clust,function(i)
-    #       toString(per_k[[i]][sort(unlist(pvalue_k[[i]]), decreasing = T,index=TRUE)$ix[1:min(3,length(per_k[[i]]))]]))
-    #     #label
-    # 
-    #     enrich=as.factor(unlist(lapply(c(1:length(cell_time)), function(i)
-    #       enrich_gene_per[[clu[i]]])))
-    # 
-    #     names(enrich)=names(mc$clusterid)
-    #     mc$clusterid=enrich
-    #     plotmclust(mc,show_cell_names = F)+
-    #       theme(legend.position = "right", legend.key.size = unit(0.3, "in"),
-    #             legend.text = element_text(size = 10),legend.title=element_text(size = 10)) +
-    #       theme(legend.key = element_blank())+
-    #       labs(title = "PCA pseudo time")
-    #   }
-    # })
+    output$pca_curve <- renderPlot({
+    if (!is.null(input$celltype)){
+      if (input$new == TRUE){
+        if (input$pseudo == 'rna_pseudo'){
+          cell_time = cell_predicted()[which(cell_predicted()%in%input$celltype)]
+        }else if (input$pseudo == 'true_pseudo'){
+          cell_time = cell_true()[which(cell_true()%in%input$celltype)]
+        }else if (input$pseudo == 'pred_pseudo'){
+          cell_time = cell_predicted()[which(cell_predicted()%in%input$celltype)]
+        # }else if (input$pseudo == 'comb_pseudo'){
+        #   cell_time = cell_var()[which(cell_var()%in%input$celltype)]
+        }
+        mc=mc()
+        cell_line=unique(cell_time)
+        n.clust = c(1:max(unique(mc[[3]])))
+        clu=mc[[3]]
+        type_clu=lapply(n.clust, function(i) cell_time[which(clu==i)])  # find cell type in each cluster
+        n = lapply(n.clust,function(i) length(type_clu[[i]]))
+        x = lapply(n.clust,function(i)
+          unlist(lapply(cell_line,function(j) sum(type_clu[[i]]==j)))
+        )
+        pvalue = lapply(n.clust,function(i)
+          unlist(lapply(c(1:length(cell_line)),function(j) poisson.test(unlist(x[[i]][j]),unlist(n[i]))$p.value))
+        )
+        pvalue_k=lapply(n.clust, function(i) pvalue[[i]][which(x[[i]]!=0)])
+        per = lapply(n.clust,function(i)
+          unlist(lapply(c(1:length(cell_line)),function(j) paste(cell_line[j],':',round(100*unlist(x[[i]][[j]])/unlist(n[i]),2), "%")))
+        )
+        per_k = lapply(n.clust, function(i) per[[i]][which(x[[i]]!=0)])
+        enrich_gene_per = lapply(n.clust,function(i)
+          toString(per_k[[i]][sort(unlist(pvalue_k[[i]]), decreasing = T,index=TRUE)$ix[1:min(3,length(per_k[[i]]))]]))
+        #label
+
+        enrich=as.factor(unlist(lapply(c(1:length(cell_time)), function(i)
+          enrich_gene_per[[clu[i]]])))
+
+        names(enrich)=names(mc$clusterid)
+        mc$clusterid=enrich
+        plotmclust(mc,show_cell_names = F)+
+          theme(legend.position = "right", legend.key.size = unit(0.3, "in"),
+                legend.text = element_text(size = 10),legend.title=element_text(size = 10)) +
+          theme(legend.key = element_blank())+
+          labs(title = "PCA pseudo time")
+      }
+    }
+    })
     
     output$heat1 =renderPlotly({
       if (!is.null(tsne())){
@@ -1052,8 +1147,9 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()[which(batch_var()=='Predicted DNase')]),
                                                       '</br> Cell: ', cell_predicted(),
                                                       '</br> Batch: ', batch_var()[which(batch_var()=='Predicted DNase')])) %>%
-          layout(title = paste0('Gene expression Tsne heatmap of ',input$gene))
-      }
+        layout(title = paste0('Gene expression of ',input$gene, ' t-SNE heatmap'))
+        
+        }
     })
 
     output$heat_pca1 =renderPlotly({
@@ -1066,8 +1162,9 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()[which(batch_var()=='Predicted DNase')]),
                                                       '</br> Cell: ', cell_predicted(),
                                                       '</br> Batch: ', batch_var()[which(batch_var()=='Predicted DNase')])) %>%
-          layout(title = paste0('Gene expression PCA heatmap of ',input$gene))
-      }
+        layout(title = paste0('Gene expression of ',input$gene, ' PCA heatmap'))
+      
+        }
     })
 
     ############promoter
@@ -1080,9 +1177,9 @@ server <- function(input, output) {
       })
 
 
-    pro_comb_dat = reactive({
-        cbind(pro_pred_dat(),pro_true_dat())
-    })
+    # pro_comb_dat = reactive({
+    #     cbind(pro_pred_dat(),pro_true_dat())
+    # })
     
       time_pro_pred = reactive({
        if (length(input$gene_pro2) == 1){
@@ -1107,17 +1204,17 @@ server <- function(input, output) {
         }
       })
  
-      time_pro_comb = reactive({
-        if (length(input$gene_pro2) == 1){
-          type = pro_comb_dat()[gene_curve_pro(),which(colnames(pro_comb_dat())%in%order_comb())]
-          order = na.omit(match(order_comb(),names(type)))
-          type[order]
-        }else{
-          type = pro_comb_dat()[gene_curve_pro(),which(colnames(pro_comb_dat())%in%order_comb())]
-          order = na.omit(match(order_comb(),colnames(type)))
-          type[,order]
-        }
-      })
+      # time_pro_comb = reactive({
+      #   if (length(input$gene_pro2) == 1){
+      #     type = pro_comb_dat()[gene_curve_pro(),which(colnames(pro_comb_dat())%in%order_comb())]
+      #     order = na.omit(match(order_comb(),names(type)))
+      #     type[order]
+      #   }else{
+      #     type = pro_comb_dat()[gene_curve_pro(),which(colnames(pro_comb_dat())%in%order_comb())]
+      #     order = na.omit(match(order_comb(),colnames(type)))
+      #     type[,order]
+      #   }
+      # })
       
       long_pro_pred = reactive({
           long = melt(time_pro_pred(), value.name = "gene")
@@ -1128,10 +1225,10 @@ server <- function(input, output) {
         long = melt(time_pro_true(), value.name = "gene")
         long
       })
-      long_pro_comb = reactive({
-        long = melt(time_pro_comb(), value.name = "gene")
-        long
-      })
+      # long_pro_comb = reactive({
+      #   long = melt(time_pro_comb(), value.name = "gene")
+      #   long
+      # })
       
 
       
@@ -1144,10 +1241,10 @@ server <- function(input, output) {
         melt(line)
       })
       
-      line_pro_comb = reactive({
-        line = t(sapply(1:length(input$gene_pro2),function(i) fitted(loess(time_pro_comb()[i,] ~ c(1:ncol(time_pro_comb()))))))
-        melt(line)
-      })
+      # line_pro_comb = reactive({
+      #   line = t(sapply(1:length(input$gene_pro2),function(i) fitted(loess(time_pro_comb()[i,] ~ c(1:ncol(time_pro_comb()))))))
+      #   melt(line)
+      # })
       
       
 
@@ -1173,7 +1270,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Promoter Activities',
+                     title = 'Activities',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1200,7 +1297,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Promoter Activities',
+                     title = 'Activities',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1232,7 +1329,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Promoter Activities',
+                     title = 'Activities',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1260,7 +1357,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Promoter Activities',
+                     title = 'Activities',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1270,66 +1367,66 @@ server <- function(input, output) {
         }
       })
       
-      output$promoter_curve_comb =renderPlotly({
-        if (length(input$gene_pro2) == 1){
-          line1 = fitted(loess(time_pro_comb() ~ c(1:length(time_pro_comb()))))
-          line = data.frame(cbind(Var1 = 1,Var2 = c(1:length(line1)) , value = line1))
-          long= data.frame(cbind(Var1 = input$gene_pro2,Var2 = names(time_pro_comb()) , gene = time_pro_comb()))
-          rownames(long)=NULL
-          long[,2]= line[,2]
-
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  marker = list(opacity=0.5,width = 2)) %>%
-            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_pro2)),
-                                                        '</br> Gene: ', long$Var1,
-                                                        '</br> Sample: ',long$Var2))%>%
-            layout(title = 'Promoter Activities of Aligned Predicted andTrue DNase-seq',
-                     xaxis = list(
-                     title = "Pseudotime",
-                     showticklabels = FALSE,
-                     tickfont = list(
-                       size = 14,
-                       color = 'rgb(107, 107, 107)')),
-                   yaxis = list(
-                     title = 'Promoter Activities',
-                     titlefont = list(
-                       size = 16,
-                       color = 'rgb(107, 107, 107)'),
-                     tickfont = list(
-                       size = 14,
-                       color = 'rgb(107, 107, 107)')))
-          
-        }else{
-          long=long_pro_comb()
-          line=line_pro_comb()
-          
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,
-                  marker = list(opacity=0.5,width = 2)) %>%
-            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
-                      color = ~long$Var1)  %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_pro2)),
-                                                        '</br> Gene: ', long$Var1,
-                                                        '</br> Sample: ',long$Var2))%>%
-            layout(title = 'Promoter Activities of Aligned Predicted andTrue DNase-seq',
-                   xaxis = list(
-                     title = "Pseudotime",
-                     showticklabels = FALSE,
-                     tickfont = list(
-                       size = 14,
-                       color = 'rgb(107, 107, 107)')),
-                   yaxis = list(
-                     title = 'Promoter Activities',
-                     titlefont = list(
-                       size = 16,
-                       color = 'rgb(107, 107, 107)'),
-                     tickfont = list(
-                       size = 14,
-                       color = 'rgb(107, 107, 107)')))
-        }
-      })
-
+      # output$promoter_curve_comb =renderPlotly({
+      #   if (length(input$gene_pro2) == 1){
+      #     line1 = fitted(loess(time_pro_comb() ~ c(1:length(time_pro_comb()))))
+      #     line = data.frame(cbind(Var1 = 1,Var2 = c(1:length(line1)) , value = line1))
+      #     long= data.frame(cbind(Var1 = input$gene_pro2,Var2 = names(time_pro_comb()) , gene = time_pro_comb()))
+      #     rownames(long)=NULL
+      #     long[,2]= line[,2]
+      # 
+      #     plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+      #             marker = list(opacity=0.5,width = 2)) %>%
+      #       add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
+      #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_pro2)),
+      #                                                   '</br> Gene: ', long$Var1,
+      #                                                   '</br> Sample: ',long$Var2))%>%
+      #       layout(title = 'Promoter Activities of Aligned Predicted and True DNase-seq',
+      #                xaxis = list(
+      #                title = "Pseudotime",
+      #                showticklabels = FALSE,
+      #                tickfont = list(
+      #                  size = 14,
+      #                  color = 'rgb(107, 107, 107)')),
+      #              yaxis = list(
+      #                title = 'Activities',
+      #                titlefont = list(
+      #                  size = 16,
+      #                  color = 'rgb(107, 107, 107)'),
+      #                tickfont = list(
+      #                  size = 14,
+      #                  color = 'rgb(107, 107, 107)')))
+      #     
+      #   }else{
+      #     long=long_pro_comb()
+      #     line=line_pro_comb()
+      #     
+      #     plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+      #             color = ~Var1,
+      #             marker = list(opacity=0.5,width = 2)) %>%
+      #       add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
+      #                 color = ~long$Var1)  %>%
+      #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_pro2)),
+      #                                                   '</br> Gene: ', long$Var1,
+      #                                                   '</br> Sample: ',long$Var2))%>%
+      #       layout(title = 'Promoter Activities of Aligned Predicted and True DNase-seq',
+      #              xaxis = list(
+      #                title = "Pseudotime",
+      #                showticklabels = FALSE,
+      #                tickfont = list(
+      #                  size = 14,
+      #                  color = 'rgb(107, 107, 107)')),
+      #              yaxis = list(
+      #                title = 'Activities',
+      #                titlefont = list(
+      #                  size = 16,
+      #                  color = 'rgb(107, 107, 107)'),
+      #                tickfont = list(
+      #                  size = 14,
+      #                  color = 'rgb(107, 107, 107)')))
+      #   }
+      # })
+      # 
 
 
       output$heat_promoter =renderPlotly({
@@ -1340,7 +1437,8 @@ server <- function(input, output) {
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
                                                         '</br> Cell: ', cell_var(),
                                                         '</br> Batch: ', batch_var())) %>%
-          layout(title = paste0('Promoter TSNE heatmap of ',input$gene_pro))
+          layout(title = paste0('Promoter activity of ',input$gene_pro, ' t-SNE heatmap'))
+          
         }
       })
 
@@ -1352,7 +1450,8 @@ server <- function(input, output) {
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
                                                         '</br> Cell: ', cell_var(),
                                                         '</br> Batch: ', batch_var())) %>%
-            layout(title = paste0('Promoter PCA heatmap of ',input$gene_pro))
+          layout(title = paste0('Promoter activity of ',input$gene_pro, ' PCA heatmap'))
+          
         }
       })
 
@@ -1368,10 +1467,10 @@ server <- function(input, output) {
       })
       
       
-      enhancer_comb_dat = reactive({
-        cbind(enhancer_pred_dat(),enhancer_true_dat())
-      })
-      
+      # enhancer_comb_dat = reactive({
+      #   cbind(enhancer_pred_dat(),enhancer_true_dat())
+      # })
+      # 
       time_enhancer_pred = reactive({
         if (length(input$gene_enhancer2) == 1){
           type = enhancer_pred_dat()[gene_curve_enhancer(),which(colnames(enhancer_pred_dat())%in%order_pred())]
@@ -1396,17 +1495,17 @@ server <- function(input, output) {
         }
       })
       
-      time_enhancer_comb = reactive({
-        if (length(input$gene_enhancer2) == 1){
-          type = enhancer_comb_dat()[gene_curve_enhancer(),which(colnames(enhancer_comb_dat())%in%order_comb())]
-          order = na.omit(match(order_comb(),names(type)))
-          type[order]
-        }else{
-          type = enhancer_comb_dat()[gene_curve_enhancer(),which(colnames(enhancer_comb_dat())%in%order_comb())]
-          order = na.omit(match(order_comb(),colnames(type)))
-          type[,order]
-        }
-      })
+      # time_enhancer_comb = reactive({
+      #   if (length(input$gene_enhancer2) == 1){
+      #     type = enhancer_comb_dat()[gene_curve_enhancer(),which(colnames(enhancer_comb_dat())%in%order_comb())]
+      #     order = na.omit(match(order_comb(),names(type)))
+      #     type[order]
+      #   }else{
+      #     type = enhancer_comb_dat()[gene_curve_enhancer(),which(colnames(enhancer_comb_dat())%in%order_comb())]
+      #     order = na.omit(match(order_comb(),colnames(type)))
+      #     type[,order]
+      #   }
+      # })
       
       long_enhancer_pred = reactive({
         long = melt(time_enhancer_pred(), value.name = "gene")
@@ -1416,10 +1515,10 @@ server <- function(input, output) {
         long = melt(time_enhancer_true(), value.name = "gene")
         long
       })
-      long_enhancer_comb = reactive({
-        long = melt(time_enhancer_comb(), value.name = "gene")
-        long
-      })
+      # long_enhancer_comb = reactive({
+      #   long = melt(time_enhancer_comb(), value.name = "gene")
+      #   long
+      # })
       
       
       
@@ -1432,10 +1531,10 @@ server <- function(input, output) {
         melt(line)
       })
       
-      line_enhancer_comb = reactive({
-        line = t(sapply(1:length(input$gene_enhancer2),function(i) fitted(loess(time_enhancer_comb()[i,] ~ c(1:ncol(time_enhancer_comb()))))))
-        melt(line)
-      })
+      # line_enhancer_comb = reactive({
+      #   line = t(sapply(1:length(input$gene_enhancer2),function(i) fitted(loess(time_enhancer_comb()[i,] ~ c(1:ncol(time_enhancer_comb()))))))
+      #   melt(line)
+      # })
       
       output$enhancer_curve_pred =renderPlotly({
         if (length(input$gene_enhancer2) == 1){
@@ -1460,7 +1559,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Enhancer Activities',
+                     title = 'Activities',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1488,7 +1587,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Enhancer Activities',
+                     title = 'Activities',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1519,7 +1618,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Enhancer Activities',
+                     title = 'Activities',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1547,7 +1646,7 @@ server <- function(input, output) {
                        size = 14,
                        color = 'rgb(107, 107, 107)')),
                    yaxis = list(
-                     title = 'Enhancer Activities',
+                     title = 'Activities',
                      titlefont = list(
                        size = 16,
                        color = 'rgb(107, 107, 107)'),
@@ -1557,64 +1656,64 @@ server <- function(input, output) {
         }
       })
       
-      output$enhancer_curve_comb =renderPlotly({
-        if (length(input$gene_enhancer2) == 1){
-          line1 = fitted(loess(time_enhancer_comb() ~ c(1:length(time_enhancer_comb()))))
-          line = data.frame(cbind(Var1 = 1,Var2 = c(1:length(line1)) , value = line1))
-          long= data.frame(cbind(Var1 = input$gene_enhancer2,Var2 = names(time_enhancer_comb()) , gene = time_enhancer_comb()))
-          rownames(long)=NULL
-          long[,2]= line[,2]  
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  marker = list(opacity=0.5,width = 2)) %>%
-            add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_enhancer2)),
-                                                        '</br> Gene: ', long$Var1,
-                                                        '</br> Sample: ',long$Var2))%>%
-            layout(title = 'Enhancer Activities Curve of Aligned Predicted True DNase-seq',
-                     xaxis = list(
-                     title = "Pseudotime",
-                     showticklabels = FALSE,
-                     tickfont = list(
-                       size = 14,
-                       color = 'rgb(107, 107, 107)')),
-                   yaxis = list(
-                     title = 'Enhancer Activities',
-                     titlefont = list(
-                       size = 16,
-                       color = 'rgb(107, 107, 107)'),
-                     tickfont = list(
-                       size = 14,
-                       color = 'rgb(107, 107, 107)')))
-          
-        }else{
-          long=long_enhancer_comb()
-          line=line_enhancer_comb()
-          
-          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                  color = ~Var1,
-                  marker = list(opacity=0.5,width = 2)) %>%
-            add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
-                      color = ~long$Var1)  %>%
-            add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_enhancer2)),
-                                                        '</br> Gene: ', long$Var1,
-                                                        '</br> Sample: ',long$Var2))%>%
-            layout(title = 'Enhancer Activities Curve of Aligned Predicted True DNase-seq',
-                   xaxis = list(
-                     title = "Pseudotime",
-                     showticklabels = FALSE,
-                     tickfont = list(
-                       size = 14,
-                       color = 'rgb(107, 107, 107)')),
-                   yaxis = list(
-                     title = 'Enhancer Activities',
-                     titlefont = list(
-                       size = 16,
-                       color = 'rgb(107, 107, 107)'),
-                     tickfont = list(
-                       size = 14,
-                       color = 'rgb(107, 107, 107)')))
-        }
-      })
+      # output$enhancer_curve_comb =renderPlotly({
+      #   if (length(input$gene_enhancer2) == 1){
+      #     line1 = fitted(loess(time_enhancer_comb() ~ c(1:length(time_enhancer_comb()))))
+      #     line = data.frame(cbind(Var1 = 1,Var2 = c(1:length(line1)) , value = line1))
+      #     long= data.frame(cbind(Var1 = input$gene_enhancer2,Var2 = names(time_enhancer_comb()) , gene = time_enhancer_comb()))
+      #     rownames(long)=NULL
+      #     long[,2]= line[,2]  
+      #     plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+      #             marker = list(opacity=0.5,width = 2)) %>%
+      #       add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
+      #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_enhancer2)),
+      #                                                   '</br> Gene: ', long$Var1,
+      #                                                   '</br> Sample: ',long$Var2))%>%
+      #       layout(title = 'Enhancer Activities Curve of Aligned Predicted True DNase-seq',
+      #                xaxis = list(
+      #                title = "Pseudotime",
+      #                showticklabels = FALSE,
+      #                tickfont = list(
+      #                  size = 14,
+      #                  color = 'rgb(107, 107, 107)')),
+      #              yaxis = list(
+      #                title = 'Activities',
+      #                titlefont = list(
+      #                  size = 16,
+      #                  color = 'rgb(107, 107, 107)'),
+      #                tickfont = list(
+      #                  size = 14,
+      #                  color = 'rgb(107, 107, 107)')))
+      #     
+      #   }else{
+      #     long=long_enhancer_comb()
+      #     line=line_enhancer_comb()
+      #     
+      #     plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+      #             color = ~Var1,
+      #             marker = list(opacity=0.5,width = 2)) %>%
+      #       add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
+      #                 color = ~long$Var1)  %>%
+      #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_enhancer2)),
+      #                                                   '</br> Gene: ', long$Var1,
+      #                                                   '</br> Sample: ',long$Var2))%>%
+      #       layout(title = 'Enhancer Activities Curve of Aligned Predicted True DNase-seq',
+      #              xaxis = list(
+      #                title = "Pseudotime",
+      #                showticklabels = FALSE,
+      #                tickfont = list(
+      #                  size = 14,
+      #                  color = 'rgb(107, 107, 107)')),
+      #              yaxis = list(
+      #                title = 'Activities',
+      #                titlefont = list(
+      #                  size = 16,
+      #                  color = 'rgb(107, 107, 107)'),
+      #                tickfont = list(
+      #                  size = 14,
+      #                  color = 'rgb(107, 107, 107)')))
+      #   }
+      # })
       
 
       output$heat_enhancer =renderPlotly({
@@ -1626,7 +1725,8 @@ server <- function(input, output) {
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
                                                         '</br> Cell: ', cell_var(),
                                                         '</br> Batch: ', batch_var())) %>%
-            layout(title = paste0('Enhancer TSNE heatmap of ',input$gene_enhancer))
+          layout(title = paste0('Enhancer activity of ',input$gene_enhancer, ' t-SNE heatmap'))
+          
         }
       })
 
@@ -1639,7 +1739,7 @@ server <- function(input, output) {
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
                                                         '</br> Cell: ', cell_var(),
                                                         '</br> Batch: ', batch_var())) %>%
-            layout(title = paste0('Enhancer PCA heatmap of ',input$gene_enhancer))
+            layout(title = paste0('Enhancer activity of ',input$gene_enhancer, ' PCA heatmap'))
         }
       })
     # 
@@ -1654,9 +1754,9 @@ server <- function(input, output) {
 
     
     
-    tf_comb_dat = reactive({
-      cbind(tf_pred_dat(),tf_true_dat())
-    })
+    # tf_comb_dat = reactive({
+    #   cbind(tf_pred_dat(),tf_true_dat())
+    # })
     
     time_tf_pred = reactive({
       if (length(input$gene_tf2) == 1){
@@ -1681,18 +1781,18 @@ server <- function(input, output) {
         type[,order]
       }
     })
-    
-    time_tf_comb = reactive({
-      if (length(input$gene_tf2) == 1){
-        type = tf_comb_dat()[gene_curve_tf(),which(colnames(tf_comb_dat())%in%order_comb())]
-        order = na.omit(match(order_comb(),names(type)))
-        type[order]
-      }else{
-        type = tf_comb_dat()[gene_curve_tf(),which(colnames(tf_comb_dat())%in%order_comb())]
-        order = na.omit(match(order_comb(),colnames(type)))
-        type[,order]
-      }
-    })
+    # 
+    # time_tf_comb = reactive({
+    #   if (length(input$gene_tf2) == 1){
+    #     type = tf_comb_dat()[gene_curve_tf(),which(colnames(tf_comb_dat())%in%order_comb())]
+    #     order = na.omit(match(order_comb(),names(type)))
+    #     type[order]
+    #   }else{
+    #     type = tf_comb_dat()[gene_curve_tf(),which(colnames(tf_comb_dat())%in%order_comb())]
+    #     order = na.omit(match(order_comb(),colnames(type)))
+    #     type[,order]
+    #   }
+    # })
     
     long_tf_pred = reactive({
       long = melt(time_tf_pred(), value.name = "gene")
@@ -1702,10 +1802,10 @@ server <- function(input, output) {
       long = melt(time_tf_true(), value.name = "gene")
       long
     })
-    long_tf_comb = reactive({
-      long = melt(time_tf_comb(), value.name = "gene")
-      long
-    })
+    # long_tf_comb = reactive({
+    #   long = melt(time_tf_comb(), value.name = "gene")
+    #   long
+    # })
     
     
     
@@ -1718,10 +1818,10 @@ server <- function(input, output) {
       melt(line)
     })
     
-    line_tf_comb = reactive({
-      line = t(sapply(1:length(input$gene_tf2),function(i) fitted(loess(time_tf_comb()[i,] ~ c(1:ncol(time_tf_comb()))))))
-      melt(line)
-    })
+    # line_tf_comb = reactive({
+    #   line = t(sapply(1:length(input$gene_tf2),function(i) fitted(loess(time_tf_comb()[i,] ~ c(1:ncol(time_tf_comb()))))))
+    #   melt(line)
+    # })
     
     output$tf_curve_pred =renderPlotly({
       if (length(input$gene_tf2) == 1){
@@ -1738,7 +1838,7 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_predicted()[match(order_pred(), colnames(optimized))],each=length(input$gene_tf2)),
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
-          layout(title = 'Transcription Factor Binding Site Activities of Predicted DNase-seq',
+          layout(title = 'Transcription Factor Motif Binding Site Activities of Predicted DNase-seq',
                  xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -1746,7 +1846,7 @@ server <- function(input, output) {
                      size = 14,
                      color = 'rgb(107, 107, 107)')),
                  yaxis = list(
-                   title = 'Transcription Factor expression',
+                   title = 'Activities',
                    titlefont = list(
                      size = 16,
                      color = 'rgb(107, 107, 107)'),
@@ -1766,7 +1866,7 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_predicted()[match(order_pred(), colnames(optimized))],each=length(input$gene_tf2)),
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
-          layout(title = 'Transcription Factor Binding Site Activities of Predicted DNase-seq',
+          layout(title = 'Transcription Factor Motif Binding Site Activities of Predicted DNase-seq',
                  xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -1774,7 +1874,7 @@ server <- function(input, output) {
                      size = 14,
                      color = 'rgb(107, 107, 107)')),
                  yaxis = list(
-                   title = 'Transcription Factor expression',
+                   title = 'Activities',
                    titlefont = list(
                      size = 16,
                      color = 'rgb(107, 107, 107)'),
@@ -1797,7 +1897,7 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_true()[match(order_true(), colnames(optimized)[445:852])],each=length(input$gene_tf2)),
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
-          layout(title = 'Transcription Factor Binding Site Activities of True DNase-seq',
+          layout(title = 'Transcription Factor Motif Binding Site Activities of True DNase-seq',
                    xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -1805,7 +1905,7 @@ server <- function(input, output) {
                      size = 14,
                      color = 'rgb(107, 107, 107)')),
                  yaxis = list(
-                   title = 'Transcription Factor Binding Site Activities',
+                   title = 'Activities',
                    titlefont = list(
                      size = 16,
                      color = 'rgb(107, 107, 107)'),
@@ -1825,7 +1925,7 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_true()[match(order_true(), colnames(optimized)[445:852])],each=length(input$gene_tf2)),
                                                       '</br> Gene: ', long$Var1,
                                                       '</br> Sample: ',long$Var2))%>%
-          layout(title = 'Transcription Factor Binding Site Activities of True DNase-seq',
+          layout(title = 'Transcription Factor Motif Binding Site Activities of True DNase-seq',
                  xaxis = list(
                    title = "Pseudotime",
                    showticklabels = FALSE,
@@ -1833,7 +1933,7 @@ server <- function(input, output) {
                      size = 14,
                      color = 'rgb(107, 107, 107)')),
                  yaxis = list(
-                   title = 'Transcription Factor Binding Site Activities',
+                   title = 'Activities',
                    titlefont = list(
                      size = 16,
                      color = 'rgb(107, 107, 107)'),
@@ -1843,64 +1943,64 @@ server <- function(input, output) {
       }
     })
     
-    output$tf_curve_comb =renderPlotly({
-      if (length(input$gene_tf2) == 1){
-        line1 = fitted(loess(time_tf_comb() ~ c(1:length(time_tf_comb()))))
-        line = data.frame(cbind(Var1 = 1,Var2 = c(1:length(line1)) , value = line1))
-        long= data.frame(cbind(Var1 = input$gene_tf2,Var2 = names(time_tf_comb()) , gene = time_tf_comb()))
-        rownames(long)=NULL
-        long[,2]= line[,2]  
-        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                marker = list(opacity=0.5,width = 2)) %>%
-          add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
-          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_tf2)),
-                                                      '</br> Gene: ', long$Var1,
-                                                      '</br> Sample: ',long$Var2))%>%
-          layout(title = 'Transcription Factor Binding Site Activities of Aligned Predicted and True DNase-seq',
-                   xaxis = list(
-                   title = "Pseudotime",
-                   showticklabels = FALSE,
-                   tickfont = list(
-                     size = 14,
-                     color = 'rgb(107, 107, 107)')),
-                 yaxis = list(
-                   title = 'Transcription Factor Binding Site Activities',
-                   titlefont = list(
-                     size = 16,
-                     color = 'rgb(107, 107, 107)'),
-                   tickfont = list(
-                     size = 14,
-                     color = 'rgb(107, 107, 107)')))
-        
-      }else{
-        long=long_tf_comb()
-        line=line_tf_comb()
-        
-        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
-                color = ~Var1,
-                marker = list(opacity=0.5,width = 2)) %>%
-          add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
-                    color = ~long$Var1)  %>%
-          add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_tf2)),
-                                                      '</br> Gene: ', long$Var1,
-                                                      '</br> Sample: ',long$Var2))%>%
-          layout(title = 'Transcription Factor Binding Site Activities of Aligned Predicted and True DNase-seq',
-                 xaxis = list(
-                   title = "Pseudotime",
-                   showticklabels = FALSE,
-                   tickfont = list(
-                     size = 14,
-                     color = 'rgb(107, 107, 107)')),
-                 yaxis = list(
-                   title = 'Transcription Factor Binding Site Activities',
-                   titlefont = list(
-                     size = 16,
-                     color = 'rgb(107, 107, 107)'),
-                   tickfont = list(
-                     size = 14,
-                     color = 'rgb(107, 107, 107)')))
-      }
-    })
+    # output$tf_curve_comb =renderPlotly({
+    #   if (length(input$gene_tf2) == 1){
+    #     line1 = fitted(loess(time_tf_comb() ~ c(1:length(time_tf_comb()))))
+    #     line = data.frame(cbind(Var1 = 1,Var2 = c(1:length(line1)) , value = line1))
+    #     long= data.frame(cbind(Var1 = input$gene_tf2,Var2 = names(time_tf_comb()) , gene = time_tf_comb()))
+    #     rownames(long)=NULL
+    #     long[,2]= line[,2]  
+    #     plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+    #             marker = list(opacity=0.5,width = 2)) %>%
+    #       add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
+    #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_tf2)),
+    #                                                   '</br> Gene: ', long$Var1,
+    #                                                   '</br> Sample: ',long$Var2))%>%
+    #       layout(title = 'Transcription Factor Motif Binding Site Activities of Aligned Predicted and True DNase-seq',
+    #                xaxis = list(
+    #                title = "Pseudotime",
+    #                showticklabels = FALSE,
+    #                tickfont = list(
+    #                  size = 14,
+    #                  color = 'rgb(107, 107, 107)')),
+    #              yaxis = list(
+    #                title = 'Activities',
+    #                titlefont = list(
+    #                  size = 16,
+    #                  color = 'rgb(107, 107, 107)'),
+    #                tickfont = list(
+    #                  size = 14,
+    #                  color = 'rgb(107, 107, 107)')))
+    #     
+    #   }else{
+    #     long=long_tf_comb()
+    #     line=line_tf_comb()
+    #     
+    #     plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+    #             color = ~Var1,
+    #             marker = list(opacity=0.5,width = 2)) %>%
+    #       add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
+    #                 color = ~long$Var1)  %>%
+    #       add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_var()[match(order_comb(), colnames(optimized))],each=length(input$gene_tf2)),
+    #                                                   '</br> Gene: ', long$Var1,
+    #                                                   '</br> Sample: ',long$Var2))%>%
+    #       layout(title = 'Transcription Factor Motif Binding Site Activities of Aligned Predicted and True DNase-seq',
+    #              xaxis = list(
+    #                title = "Pseudotime",
+    #                showticklabels = FALSE,
+    #                tickfont = list(
+    #                  size = 14,
+    #                  color = 'rgb(107, 107, 107)')),
+    #              yaxis = list(
+    #                title = 'Activities',
+    #                titlefont = list(
+    #                  size = 16,
+    #                  color = 'rgb(107, 107, 107)'),
+    #                tickfont = list(
+    #                  size = 14,
+    #                  color = 'rgb(107, 107, 107)')))
+    #   }
+    # })
     
 
     output$heat_tf =renderPlotly({
@@ -1912,7 +2012,7 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
                                                       '</br> Cell: ', cell_var(),
                                                       '</br> Batch: ', batch_var())) %>%
-          layout(title = paste0('Transcription factor TSNE heatmap of ',input$gene_tf))
+          layout(title = paste0('Transcription factor motif binding site activity of ',input$gene_tf, ' t-SNE heatmap'))
 
       }
     })
@@ -1926,7 +2026,7 @@ server <- function(input, output) {
           add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
                                                       '</br> Cell: ', cell_var(),
                                                       '</br> Batch: ', batch_var())) %>%
-          layout(title = paste0('Transcription factor PCA heatmap of ',input$gene_tf))
+          layout(title = paste0('Transcription factor motif binding site activity of ',input$gene_tf, ' PCA heatmap'))
       }
     })
 
