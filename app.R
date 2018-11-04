@@ -2,19 +2,27 @@
 options(repos = BiocInstaller::biocinstallRepos())
 getOption("repos")
 library(shiny)
+library(FNN)
+library(preprocessCore)
+
+library(GenomicRanges)
+library(data.table)
 library(kBET)
 library(ggplot2)
 library(reshape2)
 library(matrixStats)
 library(markdown)
-#source('BatchMixingEntropy.R')
 library(plotly)
 library(kBET)
 library(akima)
+library(data.table)
+library(matrixStats)
 library(reshape2)
 library(crosstalk)
 library(tidyr)
 library(dplyr)
+library(tidyverse)
+
 library (randomForest)
 library(biomaRt)
 library(org.Mm.eg.db)
@@ -49,17 +57,18 @@ load("rnaseq.rda") ## clustered, 2000 row
 load("info.rda")
 load("optimized.rda") # k=25,sigma = 0.297540831779859
 
-#  load('order_rna_rna_new.rda')
-#  load('order_rna_true_new.rda')
-#  load('order_rna_comb_new.rda')
-# 
-# 
+
 load('true_promoter.rda')
 load('pred_promoter.rda')
 load('true_enhancer.rda')
 load('pred_enhancer.rda')
 load('true_tf_qn.rda')
 load('pred_tf_qn.rda')
+load('pseudo_tf.rda')
+load('pseudo_rna.rda')
+
+load('tfregion.rda')
+DHScluster <- as.numeric(readLines("DH_cluster_2000_hg19_all.txt"))
 
 rna <- readRDS("RNA_data_norm_hg19_all_name.rds") # 
 
@@ -172,7 +181,6 @@ ui <-  shinyUI(navbarPage("APP",
                                 tags$style(type="text/css",
                                            ".shiny-output-error { visibility: hidden; }",
                                            ".shiny-output-error:before { visibility: hidden; }"),
-                                
                                 tabsetPanel(
                                   tabPanel("PCA", 
                                            h4('PCA plot'),
@@ -204,7 +212,12 @@ ui <-  shinyUI(navbarPage("APP",
                                            plotlyOutput('heat_enhancer_pca')%>% withSpinner()
                            
                                   ),
-                                  tabPanel("Gene expression curve", 
+                                  tabPanel("Curve", 
+                                           h4('True TF activities + Pseudo RNA-seq'),
+                                           plotlyOutput('tp')%>% withSpinner(),
+                                           h4('True RNA-seq + Pseudo TF activities + Pred TF activities'),
+                                           plotlyOutput('tpp')%>% withSpinner(),
+                                           
                                            h4('Gene expression curve'),
                                            plotlyOutput('curve1')%>% withSpinner(),
                                            verbatimTextOutput("impo"),
@@ -212,11 +225,10 @@ ui <-  shinyUI(navbarPage("APP",
                                            verbatimTextOutput('exon_curve_text'),
                                            verbatimTextOutput('intron_curve_text'),
                                            
-                                           
                                            h4('Transcription factor curve'),
                                            plotlyOutput('tf_curve_pred')%>% withSpinner(),
                                            h2(),
-                                           plotlyOutput('tf_curve_true')%>% withSpinner(),
+                                           plotlyOutput ('tf_curve_true')%>% withSpinner(),
                                            h2(),
                                            # plotlyOutput('tf_curve_comb')%>% withSpinner(),
                                            
@@ -240,28 +252,84 @@ ui <-  shinyUI(navbarPage("APP",
                               )# end of main panel
                             )
                           )),
-                          tabPanel("New Data", fluidPage(
+                          tabPanel("New DNase", fluidPage(
                             sidebarLayout(
                               sidebarPanel(
                                 helpText("Upload dataset"),
                                 # Input: Select a file ----
-                                fileInput("file1", "Upload new RNA-seq data",
+                                fileInput("file1", "Upload new hg19 DNase-seq data",
                                           multiple = TRUE,
                                           accept = c("text/csv",
                                                      "text/comma-separated-values,text/plain",
                                                      ".csv")),
-                                checkboxInput("timecourse", label = 'Time Course?')
+                                # actionButton('pred', label='Make prediction'),
+                                radioButtons(inputId="kind", "The data is:",
+                                             choices = list("Drug Treatment" = "drug",
+                                                            'Time Course' = 'time_course',
+                                                            'Construct pseudo time'= 'new_pseudo'),
+                                             inline=TRUE),
+                                
+                                checkboxInput("exam", label = 'Show Example'),
+                                h5('Gene'),
+                                uiOutput('gene_new'),
+                                
+                                h5('TF motif'),
+                                uiOutput('tf_new')
+                                
                               ),
                               mainPanel(
                                 tags$style(type="text/css",
                                            ".shiny-output-error { visibility: hidden; }",
                                            ".shiny-output-error:before { visibility: hidden; }"),
                                 tabsetPanel(
-                                  tabPanel("New", 
-                                           h4('Predicted TF activities + True RNA-seq'),
-                                           plotlyOutput('pse_1')%>% withSpinner(),
-                                           h4('True TF activities + Pseudo RNA-seq'),
-                                           plotlyOutput('pse_2')%>% withSpinner()
+                                  tabPanel("New DNase", 
+                                           h4('New DNase TF activities + Pseudo RNA-seq'),
+                                           plotlyOutput('new_dnase')%>% withSpinner()),
+                                  tabPanel("Example", 
+                                             h4('Drug Treatment Example'),
+                                             plotlyOutput('example')%>% withSpinner()
+                                           )
+                                                          )
+                                )
+                              )
+                            )
+                          ),
+                          tabPanel("New RNA-seq", fluidPage(
+                            sidebarLayout(
+                              sidebarPanel(
+                                helpText("Upload dataset"),
+                                # Input: Select a file ----
+                                fileInput("file2", "Upload new hg19 RNA-seq data",
+                                          multiple = TRUE,
+                                          accept = c("text/csv",
+                                                     "text/comma-separated-values,text/plain",
+                                                     ".csv")),
+                                fileInput("file3", "Upload predicted DNase data from bird",
+                                          multiple = TRUE,
+                                          accept = c("text/csv",
+                                                     "text/comma-separated-values,text/plain",
+                                                     ".csv")),
+                                # actionButton('pred', label='Make prediction'),
+                                radioButtons(inputId="kind", "The data is:",
+                                             choices = list("Drug Treatment" = "drug",
+                                                            'Time Course' = 'time_course',
+                                                            'Construct pseudo time'= 'new_pseudo'),
+                                             inline=TRUE),
+                                h5('Gene'),
+                                uiOutput('gene_new'),
+                                
+                                h5('TF motif'),
+                                uiOutput('tf_new')
+                                
+                              ),
+                              mainPanel(
+                                tags$style(type="text/css",
+                                           ".shiny-output-error { visibility: hidden; }",
+                                           ".shiny-output-error:before { visibility: hidden; }"),
+                                tabsetPanel(
+                                  tabPanel("New RNA-seq", 
+                                           h4('Pseudo DNase TF activities + New RNA-seq'),
+                                           plotlyOutput('new_rna')%>% withSpinner())
                                   )
                                 )
                               )
@@ -269,12 +337,11 @@ ui <-  shinyUI(navbarPage("APP",
                           )
                           )
 )
-)
-
 
 
 
 server <- function(input, output) {
+  options(shiny.maxRequestSize=1000*1024^2)
     cell=info[,1]
     cancer = info[,2]
     batch=info[,3]
@@ -313,7 +380,14 @@ server <- function(input, output) {
                      options = list(maxItems = nrow(rna),placeholder = 'Select genes')
       )
     })
-
+    output$gene_new <- renderUI({
+      selectizeInput("gene_new",
+                     label = "Gene of Interest",
+                     choices = rownames(rna),
+                     multiple = T,
+                     options = list(maxItems = nrow(rna),placeholder = 'Select genes')
+      )
+    })
     output$celltype <- renderUI({
       selectizeInput("celltype",
                      label = "Cell types of Interest",
@@ -345,7 +419,15 @@ server <- function(input, output) {
         )
       })
   
-      
+      output$tf_new <- renderUI({
+        selectizeInput("tf_new",
+                       label = "Transcription factor of Interest",
+                       choices = rownames(true_tf_qn),
+                       multiple = T,
+                       #selected = input$gene2,
+                       options = list(maxItems = nrow(true_tf_qn),placeholder = 'Select transcription factors')
+        )
+      })
     ######### promoter
       output$gene_pro <- renderUI({
         selectizeInput("gene_pro",
@@ -520,48 +602,48 @@ server <- function(input, output) {
       
     })
     #rna 
-    rna_dat = reactive({
-      rnaseq[,na.omit(match(pos(),which(batch=='Predicted DNase')))] 
-    })
-    
-    ####promoter
-      pro_pred_dat = reactive({
-          d =  pred_promoter[,na.omit(match(pos(),which(batch=='Predicted DNase')))]
-          colnames(d) = colnames(pred_promoter)[na.omit(match(pos(),which(batch=='Predicted DNase')))]
-          d
-        })
-
-      pro_true_dat = reactive({
-        d = true_promoter[,na.omit(match(pos(),which(batch=='True DNase')))]
-        colnames(d) = colnames(true_promoter)[na.omit(match(pos(),which(batch=='True DNase')))]
-        d
-      })
-
-      ##########enhancer
-      enhancer_pred_dat = reactive({
-        d =  pred_enhancer[,na.omit(match(pos(),which(batch=='Predicted DNase')))]
-        colnames(d) = colnames(pred_enhancer)[na.omit(match(pos(),which(batch=='Predicted DNase')))]
-        d
-      })
-
-      enhancer_true_dat = reactive({
-        d =true_enhancer[,na.omit(match(pos(),which(batch=='True DNase')))]
-        colnames(d) = colnames(true_enhancer)[na.omit(match(pos(),which(batch=='True DNase')))]
-        d
-      })
-
-    ##########tf
-    tf_pred_dat = reactive({
-      d =  pred_tf_qn[,na.omit(match(pos(),which(batch=='Predicted DNase')))]
-      colnames(d) = colnames(pred_tf_qn)[na.omit(match(pos(),which(batch=='Predicted DNase')))]
-      d
-    })
-
-    tf_true_dat = reactive({
-      d =true_tf_qn[,na.omit(match(pos(),which(batch=='True DNase')))]
-      colnames(d) = colnames(true_tf_qn)[na.omit(match(pos(),which(batch=='True DNase')))]
-      d
-    })
+    # rna_dat = reactive({
+    #   rnaseq[,na.omit(match(pos(),which(batch=='Predicted DNase')))] 
+    # })
+    # 
+    # ####promoter
+    #   pro_pred_dat = reactive({
+    #       d =  pred_promoter[,na.omit(match(pos(),which(batch=='Predicted DNase')))]
+    #       colnames(d) = colnames(pred_promoter)[na.omit(match(pos(),which(batch=='Predicted DNase')))]
+    #       d
+    #     })
+    # 
+    #   pro_true_dat = reactive({
+    #     d = true_promoter[,na.omit(match(pos(),which(batch=='True DNase')))]
+    #     colnames(d) = colnames(true_promoter)[na.omit(match(pos(),which(batch=='True DNase')))]
+    #     d
+    #   })
+    # 
+    #   ##########enhancer
+    #   enhancer_pred_dat = reactive({
+    #     d =  pred_enhancer[,na.omit(match(pos(),which(batch=='Predicted DNase')))]
+    #     colnames(d) = colnames(pred_enhancer)[na.omit(match(pos(),which(batch=='Predicted DNase')))]
+    #     d
+    #   })
+    # 
+    #   enhancer_true_dat = reactive({
+    #     d =true_enhancer[,na.omit(match(pos(),which(batch=='True DNase')))]
+    #     colnames(d) = colnames(true_enhancer)[na.omit(match(pos(),which(batch=='True DNase')))]
+    #     d
+    #   })
+    # 
+    # ##########tf
+    # tf_pred_dat = reactive({
+    #   d =  pred_tf_qn[,na.omit(match(pos(),which(batch=='Predicted DNase')))]
+    #   colnames(d) = colnames(pred_tf_qn)[na.omit(match(pos(),which(batch=='Predicted DNase')))]
+    #   d
+    # })
+    # 
+    # tf_true_dat = reactive({
+    #   d =true_tf_qn[,na.omit(match(pos(),which(batch=='True DNase')))]
+    #   colnames(d) = colnames(true_tf_qn)[na.omit(match(pos(),which(batch=='True DNase')))]
+    #   d
+    # })
 
     #####################
     
@@ -733,7 +815,7 @@ server <- function(input, output) {
       }
     })
     rna_k = reactive({
-      rna_dat()[,which(cell_predicted()%in%input$celltype)]
+      rnaseq[,which(cell_predicted()%in%input$celltype)]
     })
     
     pred_k =  reactive({
@@ -929,22 +1011,7 @@ server <- function(input, output) {
      }
     })
 
-    
-    # output$impo = renderPrint({
-    # 
-    #       })
-    # 
-    # output$curve_text = renderPrint({
-    # 
-    # })
-    # 
-    # output$exon_curve_text = renderPrint({
-    #   
-    # })
-    # 
-    # output$intron_curve_text = renderPrint({
-    # })
-    
+
     
     order_pred = reactive({
       order_rna()
@@ -991,11 +1058,11 @@ server <- function(input, output) {
     
     time = reactive({
       if (length(input$gene2) == 1){
-        type = rna[gene_curve(),which(colnames(rna_dat())%in%order_rna())]
+        type = rna[gene_curve(),which(colnames(rna)%in%order_rna())]
         order = na.omit(match(order_rna(),names(type)))
         type[order]
       }else{
-        type = rna[gene_curve(),which(colnames(rna_dat())%in%order_rna())]
+        type = rna[gene_curve(),which(colnames(rna)%in%order_rna())]
         order = na.omit(match(order_rna(),colnames(type)))
         type[,order]
       }
@@ -1011,7 +1078,116 @@ server <- function(input, output) {
       melt(line)
     })
 
+    # time_tf = reactive({
+    #   new_dat = data.frame(rbind(pseudo_rna()[gene_curve(),],pred_tf_qn()[gene_curve_tf(),],pseudo_tf[gene_curve_tf(),]))
+    #   pos = na.omit(match(order_true(),colnames(pred_tf_qn)))
+    #   new_dat = new_dat[,pos]
+    #   new_dat$type = rep(c(rep('gene',length(input$gene2)),rep(c('pred tf','pseudo tf'),each=length(input$gene_tf2))))
+    #   new_dat$gene = c(input$gene2,rep(input$gene_tf2,2))
+    # new_dat
+    # })
     
+    p_rna = reactive({
+      p_rna = pseudo_rna[gene_curve(),which(colnames(pseudo_rna)%in%order_true())]
+      p_rna[,na.omit(match(order_true(),colnames(p_rna)))]
+    })
+    
+    long_tp = reactive({ # true dnase+ pseudo rna ,use order_true 
+      true = long_tf_true()
+      rna_ps = melt(p_rna())
+      colnames(rna_ps) = colnames(true)
+      long = rbind(true,rna_ps)
+       long$type = c(rep('true TF',nrow(true)),rep('Pseudo RNA-seq',nrow(rna_ps)))
+       long
+       #long$type = factor(long$variable, levels = c(as.character(unique(long$variable))))
+     })
+    
+    pseu_tf = reactive({
+      p_tf = pseudo_tf[gene_curve_tf(),which(colnames(pseudo_tf)%in%order_rna())]
+      p_tf[,na.omit(match(order_rna(),colnames(p_tf)))]
+    })
+    
+    
+    long_tpp = reactive({ # true dnase+ pseudo rna ,use order_true 
+      rna = long()
+      pred = long_tf_pred()
+      tf_ps = melt(pseu_tf())
+      colnames(pred) = colnames(rna)
+      colnames(tf_ps) = colnames(rna)
+      long = rbind(rna,pred,tf_ps)
+      long$type = c(rep('true RNA-seq',nrow(rna)),rep('Predicted DNase',nrow(pred)),rep('Pseudo DNase',nrow(tf_ps)))
+      long
+    })
+   
+    # 
+    # 
+    # 
+    line_tp = reactive({
+      true = line_tf_true()
+      line = t(sapply(1:length(input$gene2),function(i) fitted(loess(p_rna()[i,] ~ c(1:ncol(p_rna()))))))
+      line = melt(line)
+      rbind(true,line)
+    })
+    
+    line_tpp = reactive({
+      rna = line()
+      pred = line_tf_pred()
+      line = t(sapply(1:length(input$gene_tf2),function(i) fitted(loess(pseu_tf()[i,] ~ c(1:ncol(pseu_tf()))))))
+      line = melt(line)
+      rbind(rna,pred,line)
+    })
+    
+    output$tp <- renderPlotly({
+      long=long_tp()
+      line=line_tp()
+      
+      plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+              color = ~Var1,
+              marker = list(opacity=0.5,width = 2)) %>%
+        add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
+                  color = ~long$Var1,linetype = ~long$type)  %>%
+        layout(title = paste0( 'Pseudo gene expression & true tf activities'),
+               xaxis = list(
+                 title = "Pseudotime",
+                 showticklabels = FALSE,
+                 tickfont = list(
+                   size = 14,
+                   color = 'rgb(107, 107, 107)')),
+               yaxis = list(
+                 title = 'Value',
+                 titlefont = list(
+                   size = 16,
+                   color = 'rgb(107, 107, 107)'),
+                 tickfont = list(
+                   size = 14,
+                   color = 'rgb(107, 107, 107)')))
+    })
+    
+    output$tpp <- renderPlotly({
+      long=long_tpp()
+      line=line_tpp()
+      
+      plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+              color = ~Var1,
+              marker = list(opacity=0.5,width = 2)) %>%
+        add_trace(x =~long$Var2,y = ~ line$value, type = 'scatter', mode = 'lines',showlegend = F,
+                  color = ~long$Var1,linetype = ~long$type)  %>%
+        layout(title = paste0( 'Truw gene expression & pred tf activities & pseudo tf activities'),
+               xaxis = list(
+                 title = "Pseudotime",
+                 showticklabels = FALSE,
+                 tickfont = list(
+                   size = 14,
+                   color = 'rgb(107, 107, 107)')),
+               yaxis = list(
+                 title = 'Value',
+                 titlefont = list(
+                   size = 16,
+                   color = 'rgb(107, 107, 107)'),
+                 tickfont = list(
+                   size = 14,
+                   color = 'rgb(107, 107, 107)')))
+    })
 
     output$curve1 =renderPlotly({
       if (length(input$gene2) == 1){
@@ -1178,27 +1354,27 @@ server <- function(input, output) {
 
 
     # pro_comb_dat = reactive({
-    #     cbind(pro_pred_dat(),pro_true_dat())
+    #     cbind(pred_promoter,true_promoter)
     # })
     
       time_pro_pred = reactive({
        if (length(input$gene_pro2) == 1){
-          type = pro_pred_dat()[gene_curve_pro(),which(colnames(pro_pred_dat())%in%order_pred())]
+          type = pred_promoter[gene_curve_pro(),which(colnames(pred_promoter)%in%order_pred())]
           order = na.omit(match(order_pred(),names(type)))
           type[order]
         }else{
-          type = pro_pred_dat()[gene_curve_pro(),which(colnames(pro_pred_dat())%in%order_pred())]
+          type = pred_promoter[gene_curve_pro(),which(colnames(pred_promoter)%in%order_pred())]
           order = na.omit(match(order_pred(),colnames(type)))
           type[,order]
         }
       })
       time_pro_true = reactive({
         if (length(input$gene_pro2) == 1){
-          type = pro_true_dat()[gene_curve_pro(),which(colnames(pro_true_dat())%in%order_true())]
+          type = true_promoter[gene_curve_pro(),which(colnames(true_promoter)%in%order_true())]
           order = na.omit(match(order_true(),names(type)))
           type[order]
         }else{
-          type = pro_true_dat()[gene_curve_pro(),which(colnames(pro_true_dat())%in%order_true())]
+          type = true_promoter[gene_curve_pro(),which(colnames(true_promoter)%in%order_true())]
           order = na.omit(match(order_true(),colnames(type)))
           type[,order]
         }
@@ -1431,7 +1607,7 @@ server <- function(input, output) {
 
       output$heat_promoter =renderPlotly({
         if (!is.null(tsne())){
-          promoter = cbind(pro_pred_dat(),pro_true_dat())[pos_gene_pro(),]
+          promoter = cbind(pred_promoter,true_promoter)[pos_gene_pro(),]
           plot_ly(tsne(), x = ~Tsne1, y = ~Tsne2,
                   color = ~promoter,size=~promoter) %>%
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
@@ -1444,7 +1620,7 @@ server <- function(input, output) {
 
       output$heat_promoter_pca =renderPlotly({
         if (!is.null(pca())){
-          promoter = cbind(pro_pred_dat(),pro_true_dat())[pos_gene_pro(),]
+          promoter = cbind(pred_promoter,true_promoter)[pos_gene_pro(),]
           plot_ly(pca(), x = ~PC1, y = ~PC2,
                   color = ~promoter,size=~promoter) %>%
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
@@ -1468,16 +1644,16 @@ server <- function(input, output) {
       
       
       # enhancer_comb_dat = reactive({
-      #   cbind(enhancer_pred_dat(),enhancer_true_dat())
+      #   cbind(pred_enhancer,true_enhancer)
       # })
       # 
       time_enhancer_pred = reactive({
         if (length(input$gene_enhancer2) == 1){
-          type = enhancer_pred_dat()[gene_curve_enhancer(),which(colnames(enhancer_pred_dat())%in%order_pred())]
+          type = pred_enhancer[gene_curve_enhancer(),which(colnames(pred_enhancer)%in%order_pred())]
           order = na.omit(match(order_pred(),names(type)))
           type[order]
         }else{
-          type = enhancer_pred_dat()[gene_curve_enhancer(),which(colnames(enhancer_pred_dat())%in%order_pred())]
+          type = pred_enhancer[gene_curve_enhancer(),which(colnames(pred_enhancer)%in%order_pred())]
           order = na.omit(match(order_pred(),colnames(type)))
           type[,order]
         }
@@ -1485,11 +1661,11 @@ server <- function(input, output) {
       
       time_enhancer_true = reactive({
         if (length(input$gene_enhancer2) == 1){
-          type = enhancer_true_dat()[gene_curve_enhancer(),which(colnames(enhancer_true_dat())%in%order_true())]
+          type = true_enhancer[gene_curve_enhancer(),which(colnames(true_enhancer)%in%order_true())]
           order = na.omit(match(order_true(),names(type)))
           type[order]
         }else{
-          type = enhancer_true_dat()[gene_curve_enhancer(),which(colnames(enhancer_true_dat())%in%order_true())]
+          type = true_enhancer[gene_curve_enhancer(),which(colnames(true_enhancer)%in%order_true())]
           order = na.omit(match(order_true(),colnames(type)))
           type[,order]
         }
@@ -1719,7 +1895,7 @@ server <- function(input, output) {
       output$heat_enhancer =renderPlotly({
         if (!is.null(tsne())){
           tsne=tsne()
-          Enhancer = cbind(enhancer_pred_dat(),enhancer_true_dat())[pos_gene_enhancer(),]
+          Enhancer = cbind(pred_enhancer,true_enhancer)[pos_gene_enhancer(),]
           plot_ly(tsne, x = ~Tsne1, y = ~Tsne2,
                   color = ~Enhancer,size=~Enhancer) %>%
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
@@ -1733,7 +1909,7 @@ server <- function(input, output) {
       output$heat_enhancer_pca =renderPlotly({
         if (!is.null(pca())){
           pca=pca()
-          Enhancer = cbind(enhancer_pred_dat(),enhancer_true_dat())[pos_gene_enhancer(),]
+          Enhancer = cbind(pred_enhancer,true_enhancer)[pos_gene_enhancer(),]
           plot_ly(pca, x = ~PC1, y = ~PC2,
                   color = ~Enhancer,size=~Enhancer) %>%
             add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
@@ -1755,16 +1931,16 @@ server <- function(input, output) {
     
     
     # tf_comb_dat = reactive({
-    #   cbind(tf_pred_dat(),tf_true_dat())
+    #   cbind(pred_tf_qn,true_tf_qn)
     # })
     
     time_tf_pred = reactive({
       if (length(input$gene_tf2) == 1){
-        type = tf_pred_dat()[gene_curve_tf(),which(colnames(tf_pred_dat())%in%order_pred())]
+        type = pred_tf_qn[gene_curve_tf(),which(colnames(pred_tf_qn)%in%order_pred())]
         order = na.omit(match(order_pred(),names(type)))
         type[order]
       }else{
-        type = tf_pred_dat()[gene_curve_tf(),which(colnames(tf_pred_dat())%in%order_pred())]
+        type = pred_tf_qn[gene_curve_tf(),which(colnames(pred_tf_qn)%in%order_pred())]
         order = na.omit(match(order_pred(),colnames(type)))
         type[,order]
       }
@@ -1772,11 +1948,11 @@ server <- function(input, output) {
     
     time_tf_true = reactive({
       if (length(input$gene_tf2) == 1){
-        type = tf_true_dat()[gene_curve_tf(),which(colnames(tf_true_dat())%in%order_true())]
+        type = true_tf_qn[gene_curve_tf(),which(colnames(true_tf_qn)%in%order_true())]
         order = na.omit(match(order_true(),names(type)))
         type[order]
       }else{
-        type = tf_true_dat()[gene_curve_tf(),which(colnames(tf_true_dat())%in%order_true())]
+        type = true_tf_qn[gene_curve_tf(),which(colnames(true_tf_qn)%in%order_true())]
         order = na.omit(match(order_true(),colnames(type)))
         type[,order]
       }
@@ -1809,20 +1985,23 @@ server <- function(input, output) {
     
     
     
-    line_tf_pred = reactive({
-      line = t(sapply(1:length(input$gene_tf2),function(i) fitted(loess(time_tf_pred()[i,] ~ c(1:ncol(time_tf_pred()))))))
-      melt(line)
-    })
+
     line_tf_true = reactive({
       line = t(sapply(1:length(input$gene_tf2),function(i) fitted(loess(time_tf_true()[i,] ~ c(1:ncol(time_tf_true()))))))
       melt(line)
     })
     
+    line_tf_pred = reactive({
+      line = t(sapply(1:length(input$gene_tf2),function(i) fitted(loess(time_tf_pred()[i,] ~ c(1:ncol(time_tf_pred()))))))
+      melt(line)
+    })
     # line_tf_comb = reactive({
     #   line = t(sapply(1:length(input$gene_tf2),function(i) fitted(loess(time_tf_comb()[i,] ~ c(1:ncol(time_tf_comb()))))))
     #   melt(line)
     # })
     
+
+   
     output$tf_curve_pred =renderPlotly({
       if (length(input$gene_tf2) == 1){
         line1 = fitted(loess(time_tf_pred() ~ c(1:length(time_tf_pred()))))
@@ -1830,9 +2009,7 @@ server <- function(input, output) {
         long= data.frame(cbind(Var1 = input$gene_tf2,Var2 = names(time_tf_pred()) , gene = time_tf_pred()))
         rownames(long)=NULL
         long[,2]= line[,2]
-        
-        
-        plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
+          plot_ly(long, x = ~Var2, y = ~gene, type = 'scatter',xlab='',
                 marker = list(opacity=0.5,width = 2)) %>%
           add_trace(y = ~ line$value, type = 'scatter', mode = 'lines+markers',showlegend = F) %>%
           add_markers(hoverinfo="text" ,text = ~paste('</br> Cell: ', rep(cell_predicted()[match(order_pred(), colnames(optimized))],each=length(input$gene_tf2)),
@@ -2006,7 +2183,7 @@ server <- function(input, output) {
     output$heat_tf =renderPlotly({
       if (!is.null(tsne())){
         tsne=tsne()
-        TF = cbind(tf_pred_dat(),tf_true_dat())[pos_gene_tf(),]
+        TF = cbind(pred_tf_qn,true_tf_qn)[pos_gene_tf(),]
         plot_ly(tsne, x = ~Tsne1, y = ~Tsne2,
                 color = ~TF,size=~TF) %>%
           add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
@@ -2020,7 +2197,7 @@ server <- function(input, output) {
     output$heat_tf_pca =renderPlotly({
       if (!is.null(pca())){
         pca=pca()
-        TF = cbind(tf_pred_dat(),tf_true_dat())[pos_gene_tf(),]
+        TF = cbind(pred_tf_qn,true_tf_qn)[pos_gene_tf(),]
         plot_ly(pca, x = ~PC1, y = ~PC2,
                 color = ~TF,size=~TF) %>%
           add_markers(hoverinfo="text" ,text = ~paste('</br> Sample: ',colnames(dat()),
@@ -2031,7 +2208,244 @@ server <- function(input, output) {
     })
 
 
+    ######### example 
+    new_curve = reactive({
+      match(input$gene_new,rownames(rna))
+    })
     
+    new_curve_tf = reactive({
+      match(input$tf_new,rownames(true_tf_qn))
+    })
+    
+    ######### exmaple drug treatment A549 
+    # find A549 diff treat 
+    pos_A549 = grep('A549 treated', gsub('\\.','-',gsub("_"," ",colnames(rna))))
+    rna_A549 = rna[,pos_A549][,c(1,3,2,4)]
+    #rownames(rna_A549) = rownames(rna)
+    
+    pred_tf_A549 = pred_tf_qn[,pos_A549][,c(1,3,2,4)]
+    pseudo_tf_A549 = pseudo_tf[,pos_A549][,c(1,3,2,4)]
+ 
+
+    # output$impo = renderPrint({
+    #   colnames(rna_A549())
+    # })
+    # 
+    # output$curve_text = renderPrint({
+    #  colnames(pred_tf_A549())
+    #       })
+    # 
+    # output$exon_curve_text = renderPrint({
+    #   colnames(pseudo_tf_A549())
+    # })
+    # 
+    # output$intron_curve_text = renderPrint({
+    #   sox()
+    # })
+
+    sox = reactive({
+      data.frame(rbind(rna_A549[new_curve(),],pred_tf_A549[new_curve_tf(),],pseudo_tf_A549[new_curve_tf(),]))
+          })
+    
+    long_sox = reactive({
+      sox = sox()
+      sox = sox %>%
+        mutate(type = rep(c(rep('gene',length(input$gene_new)),rep(c('pred tf','pseudo tf'),each=length(input$tf_new)))),
+               gene = c(input$gene_new,rep(input$tf_new,2)))
+      sox_time = melt(sox)
+      sox_time$variable = as.character(rep(c('100_pM','500_pM','1_nM','5_nM'),each = 2*length(input$tf_new)+length(input$gene_new)))
+      sox_time$variable = factor(sox_time$variable, levels = c(as.character(unique(sox_time$variable))))
+      sox_time
+    })
+    
+    # line_sox = reactive({
+    #   line = t(sapply(1:nrow(sox()),function(i) fitted(loess(sox()[i,] ~ c(1:ncol(sox()))))))
+    #   melt(line)
+    # })
+    output$example <- renderPlotly({
+         plot_ly(long_sox(), x = ~variable, y = ~value, type = 'scatter', mode = 'lines',xlab='',
+              color = ~gene,linetype = ~type, marker = list(opacity=0.5,width = 2)) %>%
+          layout(title = 'A549 treated dexamethasone for 1 hour Drug effect',
+               xaxis = list(
+                 title = "Treatments",
+                 showticklabels = FALSE,
+                 tickfont = list(
+                   size = 14,
+                   color = 'rgb(107, 107, 107)')),
+               yaxis = list(
+                 title = 'Value',
+                 titlefont = list(
+                   size = 16,
+                   color = 'rgb(107, 107, 107)'),
+                 tickfont = list(
+                   size = 14,
+                   color = 'rgb(107, 107, 107)')))
+          })
+################### input 
+    output$gene_new <- renderUI({
+      selectizeInput("gene_new",
+                     label = "Gene of Interest",
+                     choices = rownames(rna),
+                     multiple = T,
+                     options = list(maxItems = nrow(rna),placeholder = 'Select genes')
+      )
+    })
+    
+    output$tf_new <- renderUI({
+      selectizeInput("tf_new",
+                     label = "Transcription factor of Interest",
+                     choices = rownames(true_tf_qn),
+                     multiple = T,
+                     #selected = input$gene2,
+                     options = list(maxItems = nrow(true_tf_qn),placeholder = 'Select transcription factors')
+      )
+    })
+    
+    file <- reactive({
+      infile <- input$file1
+      if (is.null(infile)) {
+        # User has not uploaded a file yet
+        return(NULL)
+      }
+      file = read.csv(infile$datapath)
+      file[,-1]
+    })
+    ######## file include chrosom info 
+    del_row = c(699179,  699238,  999888, 1094881, 1094905)
+    
+    dnasegr_range = reactive({
+      GRanges(file()[-del_row,c(1:3)])
+    })
+    
+    dnase_new <- reactive({
+      if (!is.null(file())) {
+        dnase_new = file()[-del_row,-c(1:3)]
+        apply(dnase_new, 2, as.numeric)
+        
+      }
+    })
+    
+    ######## clustered dnase_new dnase 
+    DHScluster = DHScluster[-del_row]
+    new_cluster <- reactive({
+      new_clu = aggregate(dnase_new(),list(DHScluster),"mean")
+      as.matrix(new_clu[,-1])
+    })
+    
+    
+    new_comb = reactive({
+      new_comb = data.frame(optimized,new_cluster())
+      scalematrix <- function(data) {
+        cm <- rowMeans(data)
+        csd <- rowSds(data)
+        (data - cm) / csd
+      }
+      scalematrix(as.matrix(new_comb))
+    })
+    
+    
+    
+    pred <-  optimized[,1:444]
+    
+    ############ pseudo_new_rna
+    pseudo_new_rna = reactive({
+      add <-  new_comb()[,853:ncol(new_comb())]
+      knn = get.knnx(t(pred), t(add),  k=3,algo="CR")
+      dist = knn$nn.dist
+      index = knn$nn.index
+      pseudo_new_rna = sapply(1:nrow(index), function(i) rowSums((1/dist[i,])/sum(1/dist[i,])*rna[,index[i,]]))
+      rownames(pseudo_new_rna) = rownames(rna)
+      pseudo_new_rna
+    })
+    
+    
+    ########## get new dnase tf 
+    new = reactive({
+      2^dnase_new()
+    })
+    
+    ### find all motif : too long time 4min ??
+    new_tf =  reactive({
+      new_tf = sapply(c(1:nrow(true_tf_qn)),function(y) {
+        pos = as.data.frame(findOverlaps(tfregion[[y]],dnasegr_range()))
+        count = colSums(new()[unique(pos[,2]),])
+      })
+      new_tf = t(new_tf)
+      log2(new_tf+1)
+    })
+    
+    
+    
+    new_tf_qn = reactive({
+      all_tf = data.frame(true_tf_qn, new_tf())
+      all_tf = normalize.quantiles(as.matrix(all_tf),copy=TRUE)
+      all_tf =  t(sapply(c(1:nrow(all_tf)), function(i) (all_tf[i,] - mean(all_tf[i,]))/sd(all_tf[i,])))
+      all_tf[,409:ncol(all_tf)]
+    })
+    
+    
+    new_curve = reactive({
+      match(input$gene_new,rownames(rna))
+    })
+    
+    new_curve_tf = reactive({
+      match(input$tf_new,rownames(true_tf_qn))
+    })
+    
+    new_dat = reactive({
+      data.frame(rbind(pseudo_new_rna()[new_curve(),],new_tf_qn()[new_curve_tf(),]))
+    })
+    
+
+    
+    mc_new  = reactive({
+      if (input$kind == 'new_pseudo'){
+        data_mc = new_cluster()
+        set.seed(10)
+        exprmclust(data_mc)
+      }
+    })
+    
+    
+    order_new <- reactive({
+      if (input$kind == 'new_pseudo'){
+        TSCANorder(mc_new(),listbranch = F)
+      }
+    })
+    
+    long_new = reactive({
+      new_dat = new_dat()
+      if (input$kind == 'new_pseudo'){
+        pos = na.omit(match(order_new(),colnames(new_dat)))
+        new_dat = new_dat[,pos]
+      }
+      new_dat$type = rep(c(rep('new pseudo rna',length(input$gene_new)),rep(c('new true tf'),each=length(input$tf_new))))
+      new_dat$gene = c(input$gene_new,input$tf_new)
+      new_dat = melt(new_dat)
+      new_dat$variable = as.character(rep(colnames(dnase_new()),each = length(input$tf_new)+length(input$gene_new)))
+      new_dat$variable = factor(new_dat$variable, levels = c(as.character(unique(new_dat$variable))))
+      new_dat
+    })
+    
+    output$new_dnase <- renderPlotly({
+      plot_ly(long_new(), x = ~variable, y = ~value, type = 'scatter', mode = 'lines',xlab='',
+              color = ~gene,linetype = ~type, marker = list(opacity=0.5,width = 2)) %>%
+        layout(title = 'New DNase data: Pseudo gene expression & tf activities',
+               xaxis = list(
+                 title = "Sample",
+                 showticklabels = FALSE,
+                 tickfont = list(
+                   size = 14,
+                   color = 'rgb(107, 107, 107)')),
+               yaxis = list(
+                 title = 'Value',
+                 titlefont = list(
+                   size = 16,
+                   color = 'rgb(107, 107, 107)'),
+                 tickfont = list(
+                   size = 14,
+                   color = 'rgb(107, 107, 107)')))
+    })
     
 }
 
